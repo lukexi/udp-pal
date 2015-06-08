@@ -1,36 +1,38 @@
 import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.Trans
-import           Data.Binary
 import           Data.ByteString           (ByteString)
-import qualified Data.ByteString.Lazy      as L
 import           Data.Map                  (Map)
 import qualified Data.Map                  as Map
 import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
 import           Network.Socket.ByteString
+import           Util
 
 type ClientMap = Map SockAddr (Chan ByteString)
 
+-- | Creates a new socket to the client's address, and creates a Chan that's
+-- continuously listened to on a new thread and passed along to the new socket
 launchClientChannel :: MVar ClientMap -> SockAddr -> IO (Chan ByteString)
 launchClientChannel clientsMVar clientSockAddr = do
-
-  -- Get the client's name and port number
-  (hostName, serviceName) <- getSockAddrAddress clientSockAddr
-
-  let displayName = "->" ++ hostName ++ ":" ++ serviceName
+  
   clientChannel <- newChan
 
+  -- Start a new thread to 
   _ <- forkIO $ do
+    -- Get the client's address and port number
+    (hostName, serviceName) <- getSockAddrAddress clientSockAddr
+    -- Create a new socket to talk to it on
     toClientSock <- socketToAddress hostName serviceName
 
-    let removeClient = do
+
+    let displayName = "->" ++ hostName ++ ":" ++ serviceName
+        showException e = putStrLn $ displayName ++ " " ++ show (e::SomeException)
+        handleException = handle (\e -> showException e >> removeClient >> throwIO e)
+        removeClient = do
           putStrLn $ displayName ++ " removing self..."
           close toClientSock
           withMVar clientsMVar $ return . Map.delete clientSockAddr
 
-    let showException e = putStrLn $ displayName ++ " " ++ show (e::SomeException)
-        handleException = handle (\e -> showException e >> removeClient >> throwIO e)
     handleException . forever $ do
       
       putStrLn $ displayName ++ " awaiting message..."
@@ -45,17 +47,24 @@ launchClientChannel clientsMVar clientSockAddr = do
 
 launchServer :: IO ()
 launchServer = void . forkIO $ do
-  serverSock <- listenSocket serverPort
 
+  serverSock <- createSocket serverPort
+
+  -- TODO switch this to a broadcast channel and dup it in each client thread
   clientsMVar <- newMVar Map.empty
 
   forever $ do
     putStrLn . ("Clients now: " ++) . show . Map.keys =<< readMVar clientsMVar
     putStrLn $ "Server awaiting message..."
+
+    -- Use recvFrom so we can see who the message came from
     (stuff, fromAddr) <- recvFrom serverSock 4096
+
     let got = decode' stuff :: String
     putStrLn $ "Server got: " ++ show got ++ " from " ++ show fromAddr
-    
+
+    -- Launch a thread to speak to the client if they're new,
+    -- and broadcast the message to all clients
     modifyMVar_ clientsMVar $ \clients -> do
       -- Check if the client exists yet
       newClients <- case Map.lookup fromAddr clients of
@@ -63,7 +72,7 @@ launchServer = void . forkIO $ do
         Nothing            -> do
           clientChannel <- launchClientChannel clientsMVar fromAddr
           return $ Map.insert fromAddr clientChannel clients
-      
+
       -- Broadcast the message to all clients
       forM_ newClients $ \clientChannel ->
         writeChan clientChannel stuff
@@ -72,20 +81,27 @@ launchServer = void . forkIO $ do
 launchClient :: IO ThreadId
 launchClient = forkIO $ do
 
+  -- Create a socket and 'bind' it 
+  -- (rather than 'connect' it, as we want to receive
+  -- from whatever port the server sends to us from)
   let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE] }
-  (addrInfo:_) <- getAddrInfo hints (Just "127.0.0.1") Nothing
+  -- Get a random port
+  (addrInfo:_) <- getAddrInfo hints Nothing (Just "0")
   clientSock <- socket AF_INET Datagram defaultProtocol
   bind clientSock (addrAddress addrInfo)
 
   clientPort <- socketPort clientSock
-
   let displayName = "127.0.0.1:" ++ show clientPort
   putStrLn $ "Launched client: " ++ displayName
 
+  -- Get the address for the server's receive port
   (serverAddrInfo:_) <- getAddrInfo Nothing (Just serverName) (Just serverPort)
 
-  _bytesSent <- sendBinaryTo clientSock (addrAddress serverAddrInfo) "HELLO THERE"
+  -- Send a hello message to the server
+  let message = "HELLO THERE FROM " ++ show clientPort ++ "!"
+  _bytesSent <- sendBinaryTo clientSock (addrAddress serverAddrInfo) message
 
+  -- Begin a receive loop for this client
   (`finally` close clientSock) . forever $ do
     -- (response, _) <- recvBinaryFrom clientSock
     response <- recvBinary clientSock
@@ -93,24 +109,24 @@ launchClient = forkIO $ do
 
 main :: IO ()
 main = do
-  putStrLn "Launching Server..."
+  putStrLn "***Launching Server..."
   launchServer
   threadDelaySec 1
-  putStrLn "Launching client..."
+  putStrLn "***Launching client 1..."
   _client1 <- launchClient
 
-  putStrLn "Waiting 5 seconds..."
+  putStrLn "***Waiting 5 seconds..."
   threadDelaySec 5
 
-  putStrLn "Killing Client..."
+  putStrLn "***Killing Client..."
   killThread _client1
 
   threadDelaySec 1
-  putStrLn "Launching another client..."
+  putStrLn "***Launching client 2..."
   _client2 <- launchClient
 
   threadDelaySec 1
-  putStrLn "Done."
+  putStrLn "***Done."
 
 serverPort :: String
 serverPort = "3000"
@@ -127,50 +143,16 @@ socketToAddress toAddress toPort = do
   connect s (addrAddress addrInfo)
   return s
 
--- | Create a socket than can be listened to
-listenSocket :: ServiceName -> IO Socket
-listenSocket listenPort = do
-  -- Configure for accepting connections
+-- | Create a socket bound to our IP and the given port
+createSocket :: ServiceName -> IO Socket
+createSocket listenPort = do
+  -- AI_PASSIVE means to use our current IP
   let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE] }
-  (serverAddrInfo:_) <- getAddrInfo hints Nothing (Just listenPort)
-  sock <- socket (addrFamily serverAddrInfo) Datagram defaultProtocol
-  bind sock (addrAddress serverAddrInfo)
+  -- Create a socket
+  (addrInfo:_) <- getAddrInfo hints Nothing (Just listenPort)
+  sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
+  -- Bind it to the complete address
+  bind sock (addrAddress addrInfo)
   return sock
 
--- | Send a 'Binary' value to a socket
-sendBinary :: (MonadIO m, Binary a) => Socket -> a -> m Int
-sendBinary s = liftIO . send s . encode'
 
-sendBinaryTo :: (MonadIO m, Binary a) => Socket -> SockAddr -> a -> m Int
-sendBinaryTo s addr d = liftIO $ sendTo s (encode' d) addr
-
-recvBinary :: (MonadIO m, Binary a) => Socket -> m a
-recvBinary s = liftIO (decode' <$> recv s 4096)
-
--- recvBinaryFrom :: (MonadIO m, Binary a) => Socket -> m a
-recvBinaryFrom s = do
-  (d, fromAddr) <- recvFrom s 4096
-  return (decode' d, fromAddr)
-
--- | Encode a value to a strict bytestring
-encode' :: Binary a => a -> ByteString
-encode' = L.toStrict . encode
-
--- | Decode a value from a strict bytestring
-decode' :: Binary c => ByteString -> c
-decode' = decode . L.fromStrict
-
-
-getSockAddrAddress :: SockAddr -> IO (HostName, ServiceName)
-getSockAddrAddress sockAddr = do
-  (Just hostName0, Just serviceName) <- getNameInfo [] True True sockAddr
-
-  -- Override localhost as 127.0.0.1 to fix a "connection refused" exception due to IPV6
-  let replaceHostName "localhost" = "127.0.0.1"
-      replaceHostName other       = other
-      hostName                    = replaceHostName hostName0
-
-  return (hostName, serviceName)
-
-threadDelaySec :: Int -> IO ()
-threadDelaySec = threadDelay . (*1000000)
