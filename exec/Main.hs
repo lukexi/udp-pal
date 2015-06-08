@@ -1,41 +1,52 @@
-import Network.Socket hiding (send, sendTo, recv, recvFrom)
-import Network.Socket.ByteString
-import Control.Exception
-import Data.Binary
-import qualified Data.ByteString.Lazy as L
-import Data.ByteString (ByteString)
-import Control.Monad.Trans
-import Control.Concurrent
-import Control.Monad
-import           Data.Map (Map)
-import qualified Data.Map as Map
+import           Control.Concurrent
+import           Control.Concurrent.STM
+import           Control.Exception
+import           Control.Monad
+import           Control.Monad.Trans
+import           Data.Binary
+import           Data.ByteString           (ByteString)
+import qualified Data.ByteString.Lazy      as L
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
+import           Network.Socket.ByteString
 
-type ClientMap = Map SockAddr (Chan ByteString)
 
-threadDelaySec :: Int -> IO ()
-threadDelaySec = threadDelay . (*1000000)
 
-launchClientChannel :: MVar ClientMap -> SockAddr -> IO (Chan ByteString)
+type ClientMap = Map SockAddr (TChan ByteString)
+
+
+launchClientChannel :: MVar ClientMap -> SockAddr -> IO (TChan ByteString)
 launchClientChannel clientsMVar clientSockAddr = do
 
-  (Just hostName, Just serviceName) <- getNameInfo [] True True clientSockAddr
-  let displayName = show hostName ++ " : " ++ show serviceName
-  clientChannel <- newChan
+  -- Get the client's name and port number
+  (hostName, serviceName) <- getSockAddrAddress clientSockAddr
 
-  putStrLn $ "Launching client channel to " ++ displayName
-  
-  forkIO $ do 
-    toClientSock <- socketToAddress hostName clientPort
+  let displayName = "->" ++ hostName ++ ":" ++ serviceName
+  -- clientChannel <- newChan
+  clientChannel <- newTChanIO
+
+  putStrLn $ displayName ++ " launching client channel"
+
+  _ <- forkIO $ do
+    toClientSock <- socketToAddress hostName serviceName
 
     let removeClient = do
-          putStrLn $ "Removing client " ++ displayName
+          putStrLn $ displayName ++ " removing self..."
           sClose toClientSock
           withMVar clientsMVar $ return . Map.delete clientSockAddr
 
-    (`finally` removeClient) . forever $ do
-      message <- readChan clientChannel
-      putStrLn $ "Server Broadcasting " ++ (decode' message) ++ " to " ++ displayName
-      send toClientSock message
+    let showException e = putStrLn $ displayName ++ " " ++ show (e::SomeException)
+    forever . handle (\e -> showException e >> removeClient >> throwIO e) $ do
+      
+    -- (`finally` removeClient) . forever $ do
+      putStrLn $ displayName ++ " awaiting message..."
+      -- message <- readChan clientChannel
+      message <- atomically $ readTChan clientChannel
+      putStrLn $ displayName ++ " sending: " ++ (decode' message)
+      _bytesSent <- send toClientSock message
+
+      putStrLn $ displayName ++ " sent " ++ show _bytesSent ++ " bytes"
   return clientChannel
 
 launchServer :: IO ()
@@ -47,31 +58,37 @@ launchServer = void . forkIO $ do
   putStrLn "i'm a server"
 
   forever $ do
+    putStrLn . ("Clients now: " ++) . show . Map.keys =<< readMVar clientsMVar
+    putStrLn $ "Server awaiting message..."
     (stuff, fromAddr) <- recvFrom serverSock 4096
     let got = decode' stuff :: String
     putStrLn $ "Server got: " ++ show got ++ " from " ++ show fromAddr
 
-    withMVar clientsMVar $ \clients -> do
+    modifyMVar_ clientsMVar $ \clients -> do
+      -- Check if the client exists yet
       newClients <- case Map.lookup fromAddr clients of
         Just _ -> return clients
         Nothing            -> do
-          clientChannel <- launchClientChannel clientsMVar fromAddr 
+          clientChannel <- launchClientChannel clientsMVar fromAddr
           return $ Map.insert fromAddr clientChannel clients
-      forM newClients $ \clientChannel -> 
-        writeChan clientChannel stuff
+      putStrLn $ "Clients now: " ++ show (Map.keys newClients)
+      -- Broadcast the message to all clients
+      forM_ newClients $ \clientChannel ->
+        -- writeChan clientChannel stuff
+        atomically $ writeTChan clientChannel stuff
       return newClients
 
 launchClient :: IO ThreadId
-launchClient = forkIO $ asClient $ \sendSock -> do
+launchClient = forkIO $ asClient $ \clientSock -> do
 
-  sendB sendSock "hiiiii"
+  _bytesSent <- sendBinary clientSock "hiiiii"
+  putStrLn (show _bytesSent)
 
-  receiveSock <- listenSocket clientPort
+  -- receiveSock <- listenSocket clientPort
 
   putStrLn "I'm a client"
-  response <- recv receiveSock 4096
-  let got = decode' response :: String
-  putStrLn $ "Client got " ++ show got
+  response <- recvBinary clientSock
+  putStrLn $ "CLIENT GOT::::::::::::: " ++ (response :: String)
 
 main :: IO ()
 main = do
@@ -79,31 +96,30 @@ main = do
   launchServer
   threadDelaySec 1
   putStrLn "Launching client..."
-  client <- launchClient
+  _client1 <- launchClient
 
-  threadDelaySec 1
+  putStrLn "Waiting 5 seconds..."
+  threadDelaySec 5
 
-  putStrLn "Killing Client..."
-  killThread client
+  -- putStrLn "Killing Client..."
+  -- killThread client1
 
-  threadDelaySec 1
-  putStrLn "Launching another client..."
-  _client2 <- launchClient
+  -- threadDelaySec 1
+  -- putStrLn "Launching another client..."
+  -- _client2 <- launchClient
 
-  threadDelaySec 1
-  putStrLn "Done."
+  -- threadDelaySec 1
+  -- putStrLn "Done."
 
 serverPort :: String
 serverPort = "3000"
 
-clientPort :: String
-clientPort = "3001"
-
 serverAddr :: String
-serverAddr = "192.168.0.14"
+serverAddr = "127.0.0.1"
 
 asClient :: (Socket -> IO c) -> IO c
-asClient = withSocketsDo . bracket (socketToAddress serverAddr serverPort) (\s -> putStrLn "Closing socket" >> sClose s)
+asClient = withSocketsDo . bracket (socketToAddress serverAddr serverPort) 
+  (\s -> putStrLn "Closing socket" >> sClose s)
 
 -- asServer :: (Socket -> IO c) -> IO c
 -- asServer = withSocketsDo . bracket (listenSocket serverPort) sClose
@@ -128,8 +144,11 @@ listenSocket listenPort = do
   return sock
 
 -- | Send a 'Binary' value to a socket
-sendB :: (MonadIO m, Binary a) => Socket -> a -> m Int
-sendB s = liftIO . send s . encode'
+sendBinary :: (MonadIO m, Binary a) => Socket -> a -> m Int
+sendBinary s = liftIO . send s . encode'
+
+recvBinary :: (MonadIO m, Binary a) => Socket -> m a
+recvBinary s = liftIO (decode' <$> recv s 4096)
 
 -- | Encode a value to a strict bytestring
 encode' :: Binary a => a -> ByteString
@@ -138,3 +157,12 @@ encode' = L.toStrict . encode
 -- | Decode a value from a strict bytestring
 decode' :: Binary c => ByteString -> c
 decode' = decode . L.fromStrict
+
+
+getSockAddrAddress :: SockAddr -> IO (HostName, ServiceName)
+getSockAddrAddress sockAddr = do
+  (Just hostName, Just serviceName) <- getNameInfo [] True True sockAddr
+  return (hostName, serviceName)
+
+threadDelaySec :: Int -> IO ()
+threadDelaySec = threadDelay . (*1000000)
