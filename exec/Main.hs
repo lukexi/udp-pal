@@ -104,12 +104,12 @@ main = do
   -- putStrLn "Killing Client..."
   -- killThread client1
 
-  -- threadDelaySec 1
-  -- putStrLn "Launching another client..."
-  -- _client2 <- launchClient
+  threadDelaySec 1
+  putStrLn "Launching another client..."
+  _client2 <- launchClient
 
-  -- threadDelaySec 1
-  -- putStrLn "Done."
+  threadDelaySec 1
+  putStrLn "Done."
 
 serverPort :: String
 serverPort = "3000"
