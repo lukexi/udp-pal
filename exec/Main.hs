@@ -24,7 +24,6 @@ launchClientChannel clientsMVar clientSockAddr = do
     -- Create a new socket to talk to it on
     toClientSock <- socketToAddress hostName serviceName
 
-
     let displayName = "->" ++ hostName ++ ":" ++ serviceName
         showException e = putStrLn $ displayName ++ " " ++ show (e::SomeException)
         handleException = handle (\e -> showException e >> removeClient >> throwIO e)
@@ -84,10 +83,10 @@ launchClient = forkIO $ do
   -- Create a socket and 'bind' it 
   -- (rather than 'connect' it, as we want to receive
   -- from whatever port the server sends to us from)
-  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE] }
+  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
   -- Get a random port
   (addrInfo:_) <- getAddrInfo hints Nothing (Just "0")
-  clientSock <- socket AF_INET Datagram defaultProtocol
+  clientSock <- socket (addrFamily addrInfo) Datagram defaultProtocol
   bind clientSock (addrAddress addrInfo)
 
   clientPort <- socketPort clientSock
@@ -95,7 +94,8 @@ launchClient = forkIO $ do
   putStrLn $ "Launched client: " ++ displayName
 
   -- Get the address for the server's receive port
-  (serverAddrInfo:_) <- getAddrInfo Nothing (Just serverName) (Just serverPort)
+
+  (serverAddrInfo:_) <- getAddrInfo hints (Just serverName) (Just (show serverPort))
 
   -- Send a hello message to the server
   let message = "HELLO THERE FROM " ++ show clientPort ++ "!"
@@ -118,8 +118,8 @@ main = do
   putStrLn "***Waiting 5 seconds..."
   threadDelaySec 5
 
-  putStrLn "***Killing Client..."
-  killThread _client1
+  -- putStrLn "***Killing Client..."
+  -- killThread _client1
 
   threadDelaySec 1
   putStrLn "***Launching client 2..."
@@ -128,8 +128,8 @@ main = do
   threadDelaySec 1
   putStrLn "***Done."
 
-serverPort :: String
-serverPort = "3000"
+serverPort :: PortNumber
+serverPort = 3000
 
 serverName :: String
 serverName = "127.0.0.1"
@@ -137,19 +137,22 @@ serverName = "127.0.0.1"
 -- Connect a socket to a remote address
 socketToAddress :: HostName -> ServiceName -> IO Socket
 socketToAddress toAddress toPort = do
-  (addrInfo:_) <- getAddrInfo Nothing (Just toAddress) (Just toPort)
+
+  let hints = Just $ defaultHints { addrFamily=AF_INET }
+
+  (addrInfo:_) <- getAddrInfo hints (Just toAddress) (Just toPort)
   s <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Connect once so we can use send rather than sendTo
   connect s (addrAddress addrInfo)
   return s
 
 -- | Create a socket bound to our IP and the given port
-createSocket :: ServiceName -> IO Socket
+createSocket :: PortNumber -> IO Socket
 createSocket listenPort = do
   -- AI_PASSIVE means to use our current IP
-  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE] }
+  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
   -- Create a socket
-  (addrInfo:_) <- getAddrInfo hints Nothing (Just listenPort)
+  (addrInfo:_) <- getAddrInfo hints Nothing (Just (show listenPort))
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Bind it to the complete address
   bind sock (addrAddress addrInfo)

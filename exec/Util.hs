@@ -36,7 +36,8 @@ getSockAddrAddress sockAddr = do
   (Just hostName0, Just serviceName) <- getNameInfo [] True True sockAddr
 
   -- Override localhost as 127.0.0.1 to fix a "connection refused" exception due to IPV6
-  let replaceHostName "localhost" = "127.0.0.1"
+  let 
+      -- replaceHostName "localhost" = "127.0.0.1"
       replaceHostName other       = other
       hostName                    = replaceHostName hostName0
 
