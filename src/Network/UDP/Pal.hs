@@ -19,8 +19,8 @@ type ClientMap = Map SockAddr (Chan ByteString)
 
 -- | Creates a new socket to the client's address, and creates a Chan that's
 -- continuously listened to on a new thread and passed along to the new socket
-launchClientChannel :: MVar ClientMap -> SockAddr -> IO (Chan ByteString)
-launchClientChannel clientsMVar clientSockAddr = do
+launchClientThread :: MVar ClientMap -> SockAddr -> IO (Chan ByteString)
+launchClientThread clientsMVar clientSockAddr = do
   
   clientChannel <- newChan
 
@@ -29,7 +29,7 @@ launchClientChannel clientsMVar clientSockAddr = do
     -- Get the client's address and port number
     (hostName, serviceName) <- getSockAddrAddress clientSockAddr
     -- Create a new socket to talk to it on
-    toClientSock            <- socketToAddress hostName serviceName
+    toClientSock            <- connectedSocket hostName serviceName
 
     -- Have the thread close the socket and remove the client
     -- from the broadcast queue when an exception occurs
@@ -77,7 +77,7 @@ launchServer = void . forkIO $ do
       newClients <- case Map.lookup fromAddr clients of
         Just _ -> return clients
         Nothing            -> do
-          clientChannel <- launchClientChannel clientsMVar fromAddr
+          clientChannel <- launchClientThread clientsMVar fromAddr
           return $ Map.insert fromAddr clientChannel clients
 
       -- Broadcast the message to all clients
@@ -88,22 +88,18 @@ launchServer = void . forkIO $ do
 launchClient :: IO ThreadId
 launchClient = forkIO $ do
 
-  -- Create a socket and 'bind' it 
-  -- (rather than 'connect' it, as we want to receive
-  -- from whatever port the server sends to us from)
-  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
-  -- Get a random port
-  (addrInfo:_) <- getAddrInfo hints Nothing (Just "0")
-  clientSock <- socket (addrFamily addrInfo) Datagram defaultProtocol
-  bind clientSock (addrAddress addrInfo)
+  -- We don't 'connect' as we want to receive from whatever address
+  -- the server decides to use to talk to us.
+  -- 0 gets a random port to receive from
+  clientSock <- createSocket 0
 
-  clientPort <- socketPort clientSock
+  clientPort   <- socketPort clientSock
   let displayName = "127.0.0.1:" ++ show clientPort
   putStrLn $ "Launched client: " ++ displayName
 
   -- Get the address for the server's receive port
 
-  (serverAddrInfo:_) <- getAddrInfo hints (Just serverName) (Just (show serverPort))
+  serverAddrInfo <- addressInfo (Just serverName) (Just (show serverPort))
 
   -- Send a hello message to the server
   let message = "HELLO THERE FROM " ++ show clientPort ++ "!"
@@ -116,25 +112,30 @@ launchClient = forkIO $ do
     putStrLn $ "<-" ++ displayName ++ " received: " ++ (response :: String)
 
 
--- Connect a socket to a remote address
-socketToAddress :: HostName -> ServiceName -> IO Socket
-socketToAddress toAddress toPort = do
-
-  let hints = Just $ defaultHints { addrFamily = AF_INET }
-  
-  (addrInfo:_) <- getAddrInfo hints (Just toAddress) (Just toPort)
+-- Connect a socket connected to a remote address
+-- so 'send' and 'recv' work
+connectedSocket :: HostName -> ServiceName -> IO Socket
+connectedSocket toAddress toPort = do
+  addrInfo <- addressInfo (Just toAddress) (Just toPort)
   s <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Connect once so we can use send rather than sendTo
   connect s (addrAddress addrInfo)
   return s
 
+
+
+addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
+-- getAddrInfo always returns a non-empty list, or throws an exception
+addressInfo address port = head <$> getAddrInfo hints address port
+  where 
+    -- AI_PASSIVE means to get our current IP if none provided
+    hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
+
 -- | Create a socket bound to our IP and the given port
 createSocket :: PortNumber -> IO Socket
 createSocket listenPort = do
-  -- AI_PASSIVE means to use our current IP
-  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily = AF_INET }
   -- Create a socket
-  (addrInfo:_) <- getAddrInfo hints Nothing (Just (show listenPort))
+  addrInfo <- addressInfo Nothing (Just (show listenPort))
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Bind it to the complete address
   bind sock (addrAddress addrInfo)
