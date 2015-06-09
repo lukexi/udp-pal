@@ -57,5 +57,5 @@ getSockAddrAddress sockAddr = do
   (Just hostName, Just serviceName) <- getNameInfo [] True True sockAddr
   return (hostName, serviceName)
 
-threadDelaySec :: Int -> IO ()
-threadDelaySec = threadDelay . (*1000000)
+threadDelaySec :: Float -> IO ()
+threadDelaySec = threadDelay . floor . (*1000000)
