@@ -37,7 +37,7 @@ launchClientThread clientsMVar clientSockAddr = do
         finisher e = do
           putStrLn $ displayName ++ " removing self due to " ++ show (e::SomeException)
           close toClientSock
-          withMVar clientsMVar $ return . Map.delete clientSockAddr
+          modifyMVar_ clientsMVar $ return . Map.delete clientSockAddr
           throwIO e
 
     handle finisher . forever $ do
@@ -56,7 +56,7 @@ launchClientThread clientsMVar clientSockAddr = do
 launchServer :: IO ()
 launchServer = void . forkIO $ do
 
-  serverSock <- createSocket serverPort
+  serverSock <- boundSocket serverPort
 
   clientsMVar <- newMVar Map.empty
 
@@ -91,7 +91,7 @@ launchClient = forkIO $ do
   -- We don't 'connect' as we want to receive from whatever address
   -- the server decides to use to talk to us.
   -- 0 gets a random port to receive from
-  clientSock <- createSocket 0
+  clientSock <- boundSocket 0
 
   clientPort   <- socketPort clientSock
   let displayName = "127.0.0.1:" ++ show clientPort
@@ -122,18 +122,9 @@ connectedSocket toAddress toPort = do
   connect s (addrAddress addrInfo)
   return s
 
-
-
-addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
--- getAddrInfo always returns a non-empty list, or throws an exception
-addressInfo address port = head <$> getAddrInfo hints address port
-  where 
-    -- AI_PASSIVE means to get our current IP if none provided
-    hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
-
 -- | Create a socket bound to our IP and the given port
-createSocket :: PortNumber -> IO Socket
-createSocket listenPort = do
+boundSocket :: PortNumber -> IO Socket
+boundSocket listenPort = do
   -- Create a socket
   addrInfo <- addressInfo Nothing (Just (show listenPort))
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
@@ -142,3 +133,9 @@ createSocket listenPort = do
   return sock
 
 
+addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
+-- getAddrInfo always returns a non-empty list, or throws an exception
+addressInfo address port = head <$> getAddrInfo hints address port
+  where 
+    -- AI_PASSIVE means to get our current IP if none provided
+    hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
