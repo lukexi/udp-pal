@@ -1,4 +1,4 @@
-module Util where
+module Network.UDP.Pal.Util where
 import Control.Monad.Trans
 import Data.Binary
 import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
