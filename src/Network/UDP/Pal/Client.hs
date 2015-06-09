@@ -17,8 +17,8 @@ makeClient :: HostName -> PortNumber -> IO Client
 makeClient destName destPort = do
   -- We don't 'connect' as we want to receive from whatever address
   -- the server decides to use to talk to us.
-  -- 0 gets a random port to receive from
-  clientSock <- boundSocket 0
+  -- Nothing uses any IP, and 0 gets a random port to receive from
+  clientSock <- boundSocket Nothing 0
 
   -- Get the address for the server's receive port
   serverAddrInfo <- addressInfo (Just destName) (Just (show destPort))

@@ -9,57 +9,14 @@ import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
 import           Network.Socket.ByteString
 import           Network.UDP.Pal.Socket
 
-serverPort :: PortNumber
-serverPort = 3000
-
-serverName :: String
-serverName = "127.0.0.1"
-
-
-
 
 type ClientMap = Map SockAddr (Chan ByteString)
 
--- | Creates a new socket to the client's address, and creates a Chan that's
--- continuously listened to on a new thread and passed along to the new socket
-launchClientThread :: MVar ClientMap -> SockAddr -> IO (Chan ByteString)
-launchClientThread clientsMVar clientSockAddr = do
-  
-  clientChannel <- newChan
 
-  -- Start a new thread to broadcast messages to the client
-  _ <- forkIO $ do
-    -- Get the client's address and port number
-    (hostName, serviceName) <- getSockAddrAddress clientSockAddr
-    -- Create a new socket to talk to it on
-    toClientSock            <- connectedSocket hostName serviceName
+makeServer :: HostName -> PortNumber -> IO ()
+makeServer serverName serverPort = void . forkIO $ do
 
-    -- Have the thread close the socket and remove the client
-    -- from the broadcast queue when an exception occurs
-    let displayName = "->" ++ hostName ++ ":" ++ serviceName
-        finisher e = do
-          putStrLn $ displayName ++ " removing self due to " ++ show (e::SomeException)
-          close toClientSock
-          modifyMVar_ clientsMVar $ return . Map.delete clientSockAddr
-          throwIO e
-
-    handle finisher . forever $ do
-      
-      -- putStrLn $ displayName ++ " awaiting message..."
-      
-      message <- readChan clientChannel
-      
-      -- putStrLn $ displayName ++ " sending: " ++ (decode' message)
-      _bytesSent <- send toClientSock message
-
-      -- putStrLn $ displayName ++ " sent " ++ show _bytesSent ++ " bytes"
-      return ()
-  return clientChannel
-
-launchServer :: IO ()
-launchServer = void . forkIO $ do
-
-  serverSock <- boundSocket serverPort
+  serverSock <- boundSocket (Just serverName) serverPort
 
   clientsMVar <- newMVar Map.empty
 
@@ -80,7 +37,7 @@ launchServer = void . forkIO $ do
       newClients <- case Map.lookup fromAddr clients of
         Just _ -> return clients
         Nothing            -> do
-          clientChannel <- launchClientThread clientsMVar fromAddr
+          clientChannel <- newClientThread clientsMVar fromAddr
           return $ Map.insert fromAddr clientChannel clients
 
       -- Broadcast the message to all clients
@@ -89,7 +46,37 @@ launchServer = void . forkIO $ do
       return newClients
 
 
+-- | Creates a new socket to the client's address, and creates a Chan that's
+-- continuously listened to on a new thread and passed along to the new socket
+newClientThread :: MVar ClientMap -> SockAddr -> IO (Chan ByteString)
+newClientThread clientsMVar clientSockAddr = do
+  
+  clientChannel <- newChan
 
+  -- Start a new thread to broadcast messages to the client
+  _ <- forkIO $ do
 
+    toClientSock            <- connectedSocketToAddr clientSockAddr
 
+    -- Have the thread close the socket and remove the client
+    -- from the broadcast queue when an exception occurs
+    (hostName, serviceName) <- getSockAddrAddress clientSockAddr
+    let displayName = "->" ++ hostName ++ ":" ++ serviceName
+        finisher e = do
+          putStrLn $ displayName ++ " removing self due to " ++ show (e::SomeException)
+          close toClientSock
+          modifyMVar_ clientsMVar $ return . Map.delete clientSockAddr
+          throwIO e
 
+    handle finisher . forever $ do
+      
+      -- putStrLn $ displayName ++ " awaiting message..."
+      
+      message <- readChan clientChannel
+      
+      -- putStrLn $ displayName ++ " sending: " ++ (decode' message)
+      _bytesSent <- send toClientSock message
+
+      -- putStrLn $ displayName ++ " sent " ++ show _bytesSent ++ " bytes"
+      return ()
+  return clientChannel

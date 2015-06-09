@@ -7,7 +7,14 @@ import qualified Data.ByteString.Lazy      as L
 import Control.Concurrent
 import Data.ByteString (ByteString)
 
-
+-- | Like connectedSocket, but takes a SockAddr rather than
+-- a HostName & ServiceName
+connectedSocketToAddr :: SockAddr -> IO Socket
+connectedSocketToAddr sockAddr = do
+    -- Get the sockAddr's address and port number
+    (hostName, serviceName) <- getSockAddrAddress sockAddr
+    -- Create a new socket to talk to it on
+    connectedSocket hostName serviceName
 
 -- Connect a socket connected to a single remote address
 -- so 'send' and 'recv' work
@@ -20,11 +27,12 @@ connectedSocket toAddress toPort = do
   return s
 
 -- | Create a socket bound to our IP and the given port
--- that can send to and receive from anywhere
-boundSocket :: PortNumber -> IO Socket
-boundSocket listenPort = do
+-- that can send to and receive from anywhere.
+-- I believe passing Just an IP will allow public IP binding, need to verify
+boundSocket :: Maybe HostName -> PortNumber -> IO Socket
+boundSocket maybeHostName listenPort = do
   -- Create a socket
-  addrInfo <- addressInfo Nothing (Just (show listenPort))
+  addrInfo <- addressInfo maybeHostName (Just (show listenPort))
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Bind it to the complete address
   bind sock (addrAddress addrInfo)
