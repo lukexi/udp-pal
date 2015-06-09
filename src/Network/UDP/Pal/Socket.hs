@@ -44,7 +44,10 @@ addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
 addressInfo address port = head <$> getAddrInfo hints address port
   where 
     -- AI_PASSIVE means to get our current IP if none provided
-    hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
+
+    hints = case address of
+      Just _  -> Just $ defaultHints { addrFamily=AF_INET }
+      Nothing -> Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
 
 
 
