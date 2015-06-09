@@ -24,31 +24,33 @@ launchClientChannel clientsMVar clientSockAddr = do
   
   clientChannel <- newChan
 
-  -- Start a new thread to 
+  -- Start a new thread to broadcast messages to the client
   _ <- forkIO $ do
     -- Get the client's address and port number
     (hostName, serviceName) <- getSockAddrAddress clientSockAddr
     -- Create a new socket to talk to it on
-    toClientSock <- socketToAddress hostName serviceName
+    toClientSock            <- socketToAddress hostName serviceName
 
+    -- Have the thread close the socket and remove the client
+    -- from the broadcast queue when an exception occurs
     let displayName = "->" ++ hostName ++ ":" ++ serviceName
-        showException e = putStrLn $ displayName ++ " " ++ show (e::SomeException)
-        handleException = handle (\e -> showException e >> removeClient >> throwIO e)
-        removeClient = do
-          putStrLn $ displayName ++ " removing self..."
+        finisher e = do
+          putStrLn $ displayName ++ " removing self due to " ++ show (e::SomeException)
           close toClientSock
           withMVar clientsMVar $ return . Map.delete clientSockAddr
+          throwIO e
 
-    handleException . forever $ do
+    handle finisher . forever $ do
       
-      putStrLn $ displayName ++ " awaiting message..."
+      -- putStrLn $ displayName ++ " awaiting message..."
       
       message <- readChan clientChannel
       
-      putStrLn $ displayName ++ " sending: " ++ (decode' message)
+      -- putStrLn $ displayName ++ " sending: " ++ (decode' message)
       _bytesSent <- send toClientSock message
 
-      putStrLn $ displayName ++ " sent " ++ show _bytesSent ++ " bytes"
+      -- putStrLn $ displayName ++ " sent " ++ show _bytesSent ++ " bytes"
+      return ()
   return clientChannel
 
 launchServer :: IO ()
@@ -56,18 +58,17 @@ launchServer = void . forkIO $ do
 
   serverSock <- createSocket serverPort
 
-  -- TODO switch this to a broadcast channel and dup it in each client thread
   clientsMVar <- newMVar Map.empty
 
   forever $ do
-    putStrLn . ("Clients now: " ++) . show . Map.keys =<< readMVar clientsMVar
-    putStrLn $ "Server awaiting message..."
+    -- putStrLn . ("Clients now: " ++) . show . Map.keys =<< readMVar clientsMVar
+    -- putStrLn $ "Server awaiting message..."
 
     -- Use recvFrom so we can see who the message came from
-    (stuff, fromAddr) <- recvFrom serverSock 4096
+    (newMessage, fromAddr) <- recvFrom serverSock 4096
 
-    let got = decode' stuff :: String
-    putStrLn $ "Server got: " ++ show got ++ " from " ++ show fromAddr
+    -- let got = decode' newMessage :: String
+    -- putStrLn $ "Server got: " ++ show got ++ " from " ++ show fromAddr
 
     -- Launch a thread to speak to the client if they're new,
     -- and broadcast the message to all clients
@@ -81,7 +82,7 @@ launchServer = void . forkIO $ do
 
       -- Broadcast the message to all clients
       forM_ newClients $ \clientChannel ->
-        writeChan clientChannel stuff
+        writeChan clientChannel newMessage
       return newClients
 
 launchClient :: IO ThreadId
@@ -119,8 +120,8 @@ launchClient = forkIO $ do
 socketToAddress :: HostName -> ServiceName -> IO Socket
 socketToAddress toAddress toPort = do
 
-  let hints = Just $ defaultHints { addrFamily=AF_INET }
-
+  let hints = Just $ defaultHints { addrFamily = AF_INET }
+  
   (addrInfo:_) <- getAddrInfo hints (Just toAddress) (Just toPort)
   s <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Connect once so we can use send rather than sendTo
@@ -131,7 +132,7 @@ socketToAddress toAddress toPort = do
 createSocket :: PortNumber -> IO Socket
 createSocket listenPort = do
   -- AI_PASSIVE means to use our current IP
-  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
+  let hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily = AF_INET }
   -- Create a socket
   (addrInfo:_) <- getAddrInfo hints Nothing (Just (show listenPort))
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
