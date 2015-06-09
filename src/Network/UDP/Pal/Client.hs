@@ -35,5 +35,5 @@ sendEncoded Client{..} = sendBinaryTo clientSocket (addrAddress clientDestinatio
 sendRaw :: MonadIO m => Client -> ByteString -> m Int
 sendRaw Client{..} bytestring = liftIO $ sendTo clientSocket bytestring (addrAddress clientDestination)
 
-receiveDecoded :: (MonadIO m, Binary a) => Client -> m a
-receiveDecoded Client{..} = recvBinary clientSocket clientPacketSize
+receiveFromDecoded :: (MonadIO m, Binary a) => Client -> m (a, SockAddr)
+receiveFromDecoded Client{..} = recvBinaryFrom clientSocket clientPacketSize

@@ -34,15 +34,9 @@ addressInfo address port = head <$> getAddrInfo hints address port
 
 
 
--- | Send a 'Binary' value to a socket
-sendBinary :: (MonadIO m, Binary a) => Socket -> a -> m Int
-sendBinary s = liftIO . send s . encode'
-
+-- | Send a 'Binary' value to a socket/address
 sendBinaryTo :: (MonadIO m, Binary a) => Socket -> SockAddr -> a -> m Int
 sendBinaryTo s addr d = liftIO $ sendTo s (encode' d) addr
-
-recvBinary :: (MonadIO m, Binary a) => Socket -> Int -> m a
-recvBinary s packetSize = liftIO (decode' <$> recv s packetSize)
 
 recvBinaryFrom :: (MonadIO m, Binary a) => Socket -> Int -> m (a, SockAddr)
 recvBinaryFrom s packetSize = liftIO $ do

@@ -26,7 +26,7 @@ launchClient = forkIO $ do
   -- Begin a receive loop for this client
   (`finally` close (clientSocket client)) . forever $ do
     -- (response, _) <- recvBinaryFrom clientSock
-    response <- receiveDecoded client
+    (response, _) <- receiveFromDecoded client
     putStrLn $ "<-" ++ displayName ++ " received: " ++ (response :: String)
 
 main :: IO ()
