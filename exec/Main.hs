@@ -1,5 +1,4 @@
 import Control.Concurrent
-import Network.Socket (close, getSocketName, PortNumber)
 import Control.Exception
 import Control.Monad
 
