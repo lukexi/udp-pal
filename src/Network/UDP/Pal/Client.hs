@@ -11,10 +11,11 @@ import           Data.Binary
 data Client = Client
   { clientSocket      :: Socket
   , clientDestination :: AddrInfo
+  , clientPacketSize  :: Int
   } deriving Show
 
-makeClient :: HostName -> PortNumber -> IO Client
-makeClient destName destPort = do
+makeClient :: HostName -> PortNumber -> Int -> IO Client
+makeClient destName destPort packetSize = do
   -- We don't 'connect' as we want to receive from whatever address
   -- the server decides to use to talk to us.
   -- Nothing uses any IP, and 0 gets a random port to receive from
@@ -23,7 +24,10 @@ makeClient destName destPort = do
   -- Get the address for the server's receive port
   serverAddrInfo <- addressInfo (Just destName) (Just (show destPort))
 
-  return Client { clientSocket = clientSock, clientDestination = serverAddrInfo }
+  return Client 
+    { clientSocket = clientSock
+    , clientDestination = serverAddrInfo
+    , clientPacketSize = packetSize }
 
 sendEncoded :: (MonadIO m, Binary a) => Client -> a -> m Int
 sendEncoded Client{..} = sendBinaryTo clientSocket (addrAddress clientDestination)
@@ -32,4 +36,4 @@ sendRaw :: MonadIO m => Client -> ByteString -> m Int
 sendRaw Client{..} bytestring = liftIO $ sendTo clientSocket bytestring (addrAddress clientDestination)
 
 receiveDecoded :: (MonadIO m, Binary a) => Client -> m a
-receiveDecoded Client{..} = recvBinary clientSocket
+receiveDecoded Client{..} = recvBinary clientSocket clientPacketSize

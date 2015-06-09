@@ -1,8 +1,9 @@
-import Network.UDP.Pal
 import Control.Concurrent
 import Network.Socket (close, getSocketName, PortNumber)
 import Control.Exception
 import Control.Monad
+
+import Network.UDP.Pal
 
 serverPort :: PortNumber
 serverPort = 3000
@@ -13,7 +14,7 @@ serverName = "127.0.0.1"
 launchClient :: IO ThreadId
 launchClient = forkIO $ do
 
-  client <- makeClient serverName serverPort
+  client <- makeClient serverName serverPort 4096
 
   displayName <- show <$> getSocketName (clientSocket client)
   putStrLn $ "*** Launched client: " ++ displayName
@@ -31,7 +32,7 @@ launchClient = forkIO $ do
 main :: IO ()
 main = do
   putStrLn "*** Launching Server..."
-  makeServer serverName serverPort
+  echoServer serverName serverPort 4096
   threadDelaySec 1
   putStrLn "*** Launching client 1..."
   _client1 <- launchClient
@@ -48,14 +49,3 @@ main = do
 
   threadDelaySec 1
   putStrLn "*** Done."
-
-
--- wishfulS = do
---   (broadcastChan, receiver) <- makeServer
-
---   receiver $ \message -> do 
---     echoToAll message
---     updateMyState message
-
---   results <- doSomeStuff
---   forM results (writeChan broadcastChan)

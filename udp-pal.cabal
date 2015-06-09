@@ -20,7 +20,9 @@ library
     Network.UDP.Pal,
     Network.UDP.Pal.Socket,
     Network.UDP.Pal.Client,
-    Network.UDP.Pal.Server
+    Network.UDP.Pal.Server,
+    Network.UDP.Pal.EchoServer
+
   build-depends:       
     base,
     network,

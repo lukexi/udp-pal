@@ -55,12 +55,12 @@ sendBinary s = liftIO . send s . encode'
 sendBinaryTo :: (MonadIO m, Binary a) => Socket -> SockAddr -> a -> m Int
 sendBinaryTo s addr d = liftIO $ sendTo s (encode' d) addr
 
-recvBinary :: (MonadIO m, Binary a) => Socket -> m a
-recvBinary s = liftIO (decode' <$> recv s 4096)
+recvBinary :: (MonadIO m, Binary a) => Socket -> Int -> m a
+recvBinary s packetSize = liftIO (decode' <$> recv s packetSize)
 
-recvBinaryFrom :: (MonadIO m, Binary a) => Socket -> m (a, SockAddr)
-recvBinaryFrom s = liftIO $ do
-  (d, fromAddr) <- recvFrom s 4096
+recvBinaryFrom :: (MonadIO m, Binary a) => Socket -> Int -> m (a, SockAddr)
+recvBinaryFrom s packetSize = liftIO $ do
+  (d, fromAddr) <- recvFrom s packetSize
   return (decode' d, fromAddr)
 
 -- | Encode a value to a strict bytestring
