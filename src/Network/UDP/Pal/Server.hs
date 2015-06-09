@@ -1,11 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module Network.UDP.Pal.Server where
-import           Control.Concurrent
-import           Control.Exception
-import           Control.Monad
 import           Data.ByteString           (ByteString)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as Map
 import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
 import           Network.Socket.ByteString
 import           Network.UDP.Pal.Socket

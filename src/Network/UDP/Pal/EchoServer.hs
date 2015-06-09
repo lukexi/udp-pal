@@ -41,7 +41,7 @@ echoServer serverName serverPort packetSize = void . forkIO $ do
 -- continuously listened to on a new thread and passed along to the new socket
 newClientThread :: SockAddr -> TChan ByteString -> MVar (Set SockAddr) -> IO ThreadId
 newClientThread clientAddr messageChan clients = forkIO $ do
-  toClientSock <- connectedSocketToAddr clientAddr
+  toClientSock <- boundSocket Nothing 0
 
   -- Have the thread close the socket and remove the client
   -- from the broadcast queue when an exception occurs
@@ -55,5 +55,5 @@ newClientThread clientAddr messageChan clients = forkIO $ do
 
   handle finisher . forever $ do    
     message <- atomically $ readTChan messageChan
-    _bytesSent <- send toClientSock message
+    _bytesSent <- sendTo toClientSock message clientAddr
     return ()

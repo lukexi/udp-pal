@@ -7,28 +7,11 @@ import qualified Data.ByteString.Lazy      as L
 import Control.Concurrent
 import Data.ByteString (ByteString)
 
--- | Like connectedSocket, but takes a SockAddr rather than
--- a HostName & ServiceName
-connectedSocketToAddr :: SockAddr -> IO Socket
-connectedSocketToAddr sockAddr = do
-    -- Get the sockAddr's address and port number
-    (hostName, serviceName) <- getSockAddrAddress sockAddr
-    -- Create a new socket to talk to it on
-    connectedSocket hostName serviceName
-
--- Connect a socket connected to a single remote address
--- so 'send' and 'recv' work
-connectedSocket :: HostName -> ServiceName -> IO Socket
-connectedSocket toAddress toPort = do
-  addrInfo <- addressInfo (Just toAddress) (Just toPort)
-  s <- socket (addrFamily addrInfo) Datagram defaultProtocol
-  -- Connect once so we can use send rather than sendTo
-  connect s (addrAddress addrInfo)
-  return s
-
 -- | Create a socket bound to our IP and the given port
 -- that can send to and receive from anywhere.
 -- I believe passing Just an IP will allow public IP binding, need to verify
+-- NOTE I gave up on 'connect()'/'send()' in favor of 'bind()'/'sendto()' 
+-- as I couldn't get it to talk across computers yet
 boundSocket :: Maybe HostName -> PortNumber -> IO Socket
 boundSocket maybeHostName listenPort = do
   -- Create a socket
@@ -44,10 +27,10 @@ addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
 addressInfo address port = head <$> getAddrInfo hints address port
   where 
     -- AI_PASSIVE means to get our current IP if none provided
-
-    hints = case address of
-      Just _  -> Just $ defaultHints { addrFamily=AF_INET }
-      Nothing -> Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
+    hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily = AF_INET }
+    -- hints = case address of
+    --   Just _  -> Just $ defaultHints { addrFamily = AF_INET }
+    --   Nothing -> Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily = AF_INET }
 
 
 
@@ -77,14 +60,7 @@ decode' = decode . L.fromStrict
 
 getSockAddrAddress :: SockAddr -> IO (HostName, ServiceName)
 getSockAddrAddress sockAddr = do
-  (Just hostName0, Just serviceName) <- getNameInfo [] True True sockAddr
-
-  -- Override localhost as 127.0.0.1 to fix a "connection refused" exception due to IPV6
-  let 
-      -- replaceHostName "localhost" = "127.0.0.1"
-      replaceHostName other       = other
-      hostName                    = replaceHostName hostName0
-
+  (Just hostName, Just serviceName) <- getNameInfo [] True True sockAddr
   return (hostName, serviceName)
 
 threadDelaySec :: Int -> IO ()
