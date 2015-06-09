@@ -1,4 +1,4 @@
-module Network.UDP.Pal.Util where
+module Network.UDP.Pal.Socket where
 import Control.Monad.Trans
 import Data.Binary
 import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
@@ -6,6 +6,39 @@ import           Network.Socket.ByteString
 import qualified Data.ByteString.Lazy      as L
 import Control.Concurrent
 import Data.ByteString (ByteString)
+
+
+
+-- Connect a socket connected to a single remote address
+-- so 'send' and 'recv' work
+connectedSocket :: HostName -> ServiceName -> IO Socket
+connectedSocket toAddress toPort = do
+  addrInfo <- addressInfo (Just toAddress) (Just toPort)
+  s <- socket (addrFamily addrInfo) Datagram defaultProtocol
+  -- Connect once so we can use send rather than sendTo
+  connect s (addrAddress addrInfo)
+  return s
+
+-- | Create a socket bound to our IP and the given port
+-- that can send to and receive from anywhere
+boundSocket :: PortNumber -> IO Socket
+boundSocket listenPort = do
+  -- Create a socket
+  addrInfo <- addressInfo Nothing (Just (show listenPort))
+  sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
+  -- Bind it to the complete address
+  bind sock (addrAddress addrInfo)
+  return sock
+
+
+addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
+-- getAddrInfo always returns a non-empty list, or throws an exception
+addressInfo address port = head <$> getAddrInfo hints address port
+  where 
+    -- AI_PASSIVE means to get our current IP if none provided
+    hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily=AF_INET }
+
+
 
 -- | Send a 'Binary' value to a socket
 sendBinary :: (MonadIO m, Binary a) => Socket -> a -> m Int

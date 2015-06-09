@@ -1,5 +1,26 @@
 import Network.UDP.Pal
-import Network.UDP.Pal.Util
+import Control.Concurrent
+import Network.Socket (close, getSocketName)
+import Control.Exception
+import Control.Monad
+
+launchClient :: IO ThreadId
+launchClient = forkIO $ do
+
+  client <- makeClient serverName serverPort
+
+  displayName <- show <$> getSocketName (clientSocket client)
+  putStrLn $ "Launched client: " ++ displayName
+
+  -- Send a hello message to the server
+  let message = "HELLO THERE FROM " ++ displayName ++ "!"
+  _bytesSent <- sendEncoded client message
+
+  -- Begin a receive loop for this client
+  (`finally` close (clientSocket client)) . forever $ do
+    -- (response, _) <- recvBinaryFrom clientSock
+    response <- receiveDecoded client
+    putStrLn $ "<-" ++ displayName ++ " received: " ++ (response :: String)
 
 main :: IO ()
 main = do
@@ -23,3 +44,12 @@ main = do
   putStrLn "***Done."
 
 
+-- wishfulS = do
+--   (broadcastChan, receiver) <- makeServer
+
+--   receiver $ \message -> do 
+--     echoToAll message
+--     updateMyState message
+
+--   results <- doSomeStuff
+--   forM results (writeChan broadcastChan)
