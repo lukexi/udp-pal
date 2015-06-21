@@ -2,10 +2,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE DeriveAnyClass   #-}
-{-# LANGUAGE DeriveGeneric   #-}
-import Network.Socket
+{-# LANGUAGE DeriveGeneric    #-}
+module UnreliableUDPBundles where
+
 import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict, fromStrict)
 import Control.Lens
 import Control.Monad
 import           Data.Map (Map)
@@ -19,6 +19,7 @@ import GHC.Generics
 import Data.Binary
 import Data.Monoid
 import Data.Maybe
+import Network.UDP.Pal.Binary
 
 data UnreliablePacket = UnreliablePacket
   { upkBundleNum :: Int
@@ -32,11 +33,12 @@ data AppState = AppState
 
 makeLenses ''AppState
 
+newAppState :: AppState
 newAppState = AppState 0
 
 -- Sending packet bundles
-encode' = toStrict . encode
 
+sendUnreliable :: TChan UnreliablePacket -> Int -> ByteString -> IO ()
 sendUnreliable chan bundleNum payload = do
   
   let packet = UnreliablePacket bundleNum payload
@@ -44,13 +46,13 @@ sendUnreliable chan bundleNum payload = do
   atomically $ writeTChan chan packet
 
 -- Receiving packet bundles
-decode' = decode . fromStrict
 
 -- | Continuously reads from the given channel and merges
 -- each received packet into a collection MVar
+createReader :: TChan UnreliablePacket -> IO (MVar (Map Int [ByteString]))
 createReader chan = do
   collection <- newMVar Map.empty
-  forkIO . forever $ do
+  _ <- forkIO . forever $ do
     UnreliablePacket{..} <- atomically (readTChan chan)
     -- putStrLn $ "Inserting " ++ show upkBundleNum
     modifyMVar collection $ \c -> 
@@ -60,18 +62,21 @@ createReader chan = do
 
 -- | Returns a list of all packets received with the given bundle number,
 -- and discards any older messages than that
+receiveBundle :: Ord k => MVar (Map k [t]) -> k -> IO [t]
 receiveBundle collection bundleNum = do
   modifyMVar collection $ \c -> do
     let (_lower, result, higher) = Map.splitLookup bundleNum c
     return (higher, fromMaybe [] result)
 
+incrBundleNum :: StateT AppState IO Int
 incrBundleNum = apsNextBundleNum <<+= 1
 
+main :: IO ()
 main = do
 
   chan <- newTChanIO
   collection <- createReader chan
-  flip runStateT newAppState $ do
+  void . flip runStateT newAppState $ do
     
     bundleNum <- incrBundleNum
     let bundle = Map.fromList [(x,y) | x <- [0..20], y <- [0..20]] :: Map Int Int

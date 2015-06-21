@@ -13,7 +13,7 @@ main = do
   putStrLn $ "*** Launched client: " ++ displayName
 
 
-  forkIO . forever $ do
+  _ <- forkIO . forever $ do
     -- Send a hello message to the server
     let message = "HELLO THERE FROM " ++ displayName ++ "!"
     _bytesSent <- sendEncoded client message
