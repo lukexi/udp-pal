@@ -11,6 +11,7 @@ import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
 import           Network.Socket.ByteString
 import           Network.UDP.Pal.Socket
 import           Network.UDP.Pal.Server
+import           Network.UDP.Pal.Binary
 
 echoServer :: HostName -> PortNumber -> Int -> IO ()
 echoServer serverName serverPort packetSize = void . forkIO $ do
@@ -37,7 +38,7 @@ echoServer serverName serverPort packetSize = void . forkIO $ do
     -- Broadcast the message to all clients
     atomically $ writeTChan broadcastChan newMessage
 
--- | Creates a new socket to the client's address, and creates a Chan that's
+-- | Creates a new socket to the client's address, and creates a TChan that's
 -- continuously listened to on a new thread and passed along to the new socket
 newClientThread :: SockAddr -> TChan ByteString -> MVar (Set SockAddr) -> IO ThreadId
 newClientThread clientAddr messageChan clients = forkIO $ do
@@ -55,5 +56,6 @@ newClientThread clientAddr messageChan clients = forkIO $ do
 
   handle finisher . forever $ do    
     message <- atomically $ readTChan messageChan
+    putStrLn $ "Sending to " ++ displayName ++ ": " ++ (decode' message :: String)
     _bytesSent <- sendTo toClientSock message clientAddr
     return ()

@@ -21,6 +21,7 @@ library
     Network.UDP.Pal.Socket,
     Network.UDP.Pal.Client,
     Network.UDP.Pal.Server,
+    Network.UDP.Pal.Binary,
     Network.UDP.Pal.EchoServer
 
   build-depends:       
