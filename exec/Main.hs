@@ -3,6 +3,7 @@ import Control.Exception
 import Control.Monad
 
 import Network.UDP.Pal
+import Halive.Concurrent
 
 serverPort :: PortNumber
 serverPort = 3000
@@ -11,11 +12,11 @@ serverName :: String
 serverName = "127.0.0.1"
 
 launchClient :: IO ThreadId
-launchClient = forkIO $ do
+launchClient = forkIO' $ do
 
-  client <- makeClient serverName serverPort 4096
+  client <- socketWithDest serverName serverPort 4096
 
-  displayName <- show <$> getSocketName (clientSocket client)
+  displayName <- show <$> getSocketName (bsSocket (swdBoundSocket client))
   putStrLn $ "*** Launched client: " ++ displayName
 
   -- Send a hello message to the server
@@ -23,9 +24,9 @@ launchClient = forkIO $ do
   _bytesSent <- sendEncoded client message
 
   -- Begin a receive loop for this client
-  (`finally` close (clientSocket client)) . forever $ do
+  flip finally (close (bsSocket (swdBoundSocket client))) . forever $ do
     -- (response, _) <- recvBinaryFrom clientSock
-    (response, _) <- receiveFromDecoded client
+    (response, _) <- receiveFromDecoded (swdBoundSocket client)
     putStrLn $ "<-" ++ displayName ++ " received: " ++ (response :: String)
 
 main :: IO ()

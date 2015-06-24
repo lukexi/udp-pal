@@ -1,0 +1,23 @@
+TODAY:
+
+[ ] Integrated test of sending both reliable cube commands 
+    (create this cube, change color to this hue, etc.)
+    (send each cube creation, then its color change)
+    and unreliable cube commands (change this cube's pose)
+      (it must be accounted for that these may 
+      appear out of order to reliable commands,
+      and thus could appear 
+      before/after creation/destruction)
+    A big grid of cubes would be great, like
+    CreateCube 0
+    ChangeHue  0 0.1
+    CreateCube 1
+    ChangeHue  1 0.2
+    etc.
+    ChangePose 0 (V3 0.1 0.2 0.3) (Quat 0.5 0.7 0.9 0.8)
+    etc.
+[ ] Think about expiration, which still may be most reliably done
+    as a clientside/serverside combo thing where the client auto-expires
+    cubes after they've existed for x seconds, and same with server.
+
+[ ] Get OpenAL basics working, then try streaming libpd to it.

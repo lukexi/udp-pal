@@ -20,22 +20,7 @@ import Data.Binary
 import Data.Monoid
 import Data.Maybe
 import Network.UDP.Pal.Binary
-
-data UnreliablePacket = UnreliablePacket
-  { upkBundleNum :: Int
-  , upkPayload :: ByteString
-  } deriving (Show, Generic, Binary)
-
-
-data AppState = AppState
-  { _apsNextBundleNum :: Int
-  }
-
-makeLenses ''AppState
-
-newAppState :: AppState
-newAppState = AppState 0
-
+import Halive.Concurrent
 -- Sending packet bundles
 
 sendUnreliable :: TChan UnreliablePacket -> Int -> ByteString -> IO ()
@@ -49,24 +34,41 @@ sendUnreliable chan bundleNum payload = do
 
 -- | Continuously reads from the given channel and merges
 -- each received packet into a collection MVar
-createReader :: TChan UnreliablePacket -> IO (MVar (Map Int [ByteString]))
-createReader chan = do
+makeCollector :: IO UnreliablePacket -> IO (MVar (Map Int [ByteString]))
+makeCollector getPacketAction = do
   collection <- newMVar Map.empty
-  _ <- forkIO . forever $ do
-    UnreliablePacket{..} <- atomically (readTChan chan)
+  _ <- forkIO' . forever $ do
+    UnreliablePacket{..} <- getPacketAction
     -- putStrLn $ "Inserting " ++ show upkBundleNum
-    modifyMVar collection $ \c -> 
-      return (Map.insertWith (<>) upkBundleNum [upkPayload] c, ())
+    modifyMVar_ collection $ 
+      return . Map.insertWith (<>) upkBundleNum [upkPayload]
 
   return collection
 
--- | Returns a list of all packets received with the given bundle number,
+-- | Called by the app when it's ready for the packets in a given bundle number
+-- As we're unreliable, some or all of these may be missing, so the app must be 
+-- designed around that.
+-- Returns a list of all packets received with the given bundle number,
 -- and discards any older messages than that
-receiveBundle :: Ord k => MVar (Map k [t]) -> k -> IO [t]
-receiveBundle collection bundleNum = do
+collectBundle :: Ord k => MVar (Map k [t]) -> k -> IO [t]
+collectBundle collection bundleNum = do
   modifyMVar collection $ \c -> do
     let (_lower, result, higher) = Map.splitLookup bundleNum c
     return (higher, fromMaybe [] result)
+
+
+-- App test
+
+
+data AppState = AppState
+  { _apsNextBundleNum :: Int
+  }
+
+makeLenses ''AppState
+
+newAppState :: AppState
+newAppState = AppState 0
+
 
 incrBundleNum :: StateT AppState IO Int
 incrBundleNum = apsNextBundleNum <<+= 1
@@ -75,7 +77,7 @@ main :: IO ()
 main = do
 
   chan <- newTChanIO
-  collection <- createReader chan
+  collection <- makeCollector (atomically (readTChan chan))
   void . flip runStateT newAppState $ do
     
     bundleNum <- incrBundleNum
@@ -87,5 +89,5 @@ main = do
     liftIO $ threadDelay 100000
 
     -- Receive one frame of data
-    results <- liftIO $ Map.fromList . map decode' <$> receiveBundle collection bundleNum
+    results <- liftIO $ Map.fromList . map decode' <$> collectBundle collection bundleNum
     liftIO $ print (results :: Map Int Int)
