@@ -47,17 +47,17 @@ sendReliable client message = do
 -- Unreliable
 -------------
 
-newtype UnreliableCollector = UnreliableCollector
-  { urcCollection :: MVar (Map BundleNum [ByteString])
+newtype UnreliableCollector a = UnreliableCollector
+  { urcCollection :: MVar (Map BundleNum [a])
   }
 
 -- | Continuously reads from the given channel and merges
 -- each received packet into a collection MVar
-makeCollector :: IO UnreliableCollector
-makeCollector = UnreliableCollector <$> newMVar Map.empty
+makeCollector :: MonadIO m => m (UnreliableCollector a)
+makeCollector = liftIO $ UnreliableCollector <$> newMVar Map.empty
 
-addPacketToCollection :: UnreliableCollector -> BundleNum -> ByteString -> IO ()
-addPacketToCollection collector bundleNum payload = 
+collectUnreliablePacket :: MonadIO m => UnreliableCollector a -> BundleNum -> a -> m ()
+collectUnreliablePacket collector bundleNum payload = liftIO $
   modifyMVar_ (urcCollection collector) $ 
     return . Map.insertWith (<>) bundleNum [payload]
 
@@ -66,8 +66,8 @@ addPacketToCollection collector bundleNum payload =
 -- designed around that.
 -- Returns a list of all packets received with the given bundle number,
 -- and discards any older messages than that
-collectBundle :: UnreliableCollector -> BundleNum -> IO [ByteString]
-collectBundle collector bundleNum = do
+extractBundle :: MonadIO m => UnreliableCollector a -> BundleNum -> m [a]
+extractBundle collector bundleNum = liftIO $ do
   modifyMVar (urcCollection collector) $ \c -> do
     let (_lower, result, higher) = Map.splitLookup bundleNum c
     return (higher, fromMaybe [] result)
