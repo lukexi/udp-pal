@@ -11,7 +11,7 @@ import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
 import           Network.UDP.Pal.Socket
 import           Network.UDP.Pal.Binary
 import           Network.UDP.Pal.Types
-import Halive.Concurrent
+import           Halive.Concurrent
 
 echoServer :: HostName -> PortNumber -> Int -> IO ()
 echoServer serverName serverPort packetSize = void . forkIO' $ do

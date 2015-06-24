@@ -32,29 +32,6 @@ sendUnreliable chan bundleNum payload = do
 
 -- Receiving packet bundles
 
--- | Continuously reads from the given channel and merges
--- each received packet into a collection MVar
-makeCollector :: IO UnreliablePacket -> IO (MVar (Map Int [ByteString]))
-makeCollector getPacketAction = do
-  collection <- newMVar Map.empty
-  _ <- forkIO' . forever $ do
-    UnreliablePacket{..} <- getPacketAction
-    -- putStrLn $ "Inserting " ++ show upkBundleNum
-    modifyMVar_ collection $ 
-      return . Map.insertWith (<>) upkBundleNum [upkPayload]
-
-  return collection
-
--- | Called by the app when it's ready for the packets in a given bundle number
--- As we're unreliable, some or all of these may be missing, so the app must be 
--- designed around that.
--- Returns a list of all packets received with the given bundle number,
--- and discards any older messages than that
-collectBundle :: Ord k => MVar (Map k [t]) -> k -> IO [t]
-collectBundle collection bundleNum = do
-  modifyMVar collection $ \c -> do
-    let (_lower, result, higher) = Map.splitLookup bundleNum c
-    return (higher, fromMaybe [] result)
 
 
 -- App test

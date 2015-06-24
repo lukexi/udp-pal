@@ -51,8 +51,8 @@ sendRaw SocketWithDest{..} bytestring =
 receiveFromDecoded :: (MonadIO m, Binary a) => BoundSocket -> m (a, SockAddr)
 receiveFromDecoded BoundSocket{..} = recvBinaryFrom bsSocket bsPacketSize
 
-receiveFromRaw :: BoundSocket -> IO (ByteString, SockAddr)
-receiveFromRaw BoundSocket{..} = recvFrom bsSocket bsPacketSize
+receiveFromRaw :: (MonadIO m) => BoundSocket -> m (ByteString, SockAddr)
+receiveFromRaw BoundSocket{..} = liftIO $ recvFrom bsSocket bsPacketSize
 
 
 -- | Get the AF_INET address for a hostname/servicename combo
@@ -70,8 +70,8 @@ addressInfo address port = head <$> getAddrInfo hints address port
 -- | Create a socket than can only send to and recv from the given
 -- sockAddr, usually as obtained via recvFrom. You could also create
 -- a SockAddr using addressInfo.
-connectedSocketToAddr :: SockAddr -> IO ConnectedSocket
-connectedSocketToAddr sockAddr = do
+connectedSocketToAddr :: MonadIO m => SockAddr -> m ConnectedSocket
+connectedSocketToAddr sockAddr = liftIO $ do
   -- Create a socket
   sock <- socket AF_INET Datagram defaultProtocol
   -- Connect it to the address for send/recv
