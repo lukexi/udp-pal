@@ -1,31 +1,32 @@
-{-# LANGUAGE TemplateHaskell  #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE DeriveGeneric    #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TemplateHaskell  #-}
 module UnreliableUDPBundles where
 
-import Data.ByteString (ByteString)
-import Control.Lens
-import Control.Monad
-import           Data.Map (Map)
-import qualified Data.Map as Map
+import           Control.Lens
+import           Control.Monad
+import           Data.ByteString        (ByteString)
+import           Data.Map               (Map)
+import qualified Data.Map               as Map
 
-import Control.Monad.State
-import Control.Concurrent.STM
-import Control.Concurrent
+import           Control.Concurrent
+import           Control.Concurrent.STM
+import           Control.Monad.State
 
-import GHC.Generics
-import Data.Binary
-import Data.Monoid
-import Data.Maybe
-import Network.UDP.Pal.Binary
-import Halive.Concurrent
+import           Data.Binary
+import           Data.Maybe
+import           Data.Monoid
+import           GHC.Generics
+import           Halive.Concurrent
+import           Network.UDP.Pal.Binary
+
 -- Sending packet bundles
 
 sendUnreliable :: TChan UnreliablePacket -> Int -> ByteString -> IO ()
 sendUnreliable chan bundleNum payload = do
-  
+
   let packet = UnreliablePacket bundleNum payload
 
   atomically $ writeTChan chan packet
@@ -56,12 +57,12 @@ main = do
   chan <- newTChanIO
   collection <- makeCollector (atomically (readTChan chan))
   void . flip runStateT newAppState $ do
-    
+
     bundleNum <- incrBundleNum
     let bundle = Map.fromList [(x,y) | x <- [0..20], y <- [0..20]] :: Map Int Int
-    forM_ (Map.toList bundle) $ \(x,y) -> 
+    forM_ (Map.toList bundle) $ \(x,y) ->
       liftIO $ sendUnreliable chan bundleNum (encode' (x,y))
-    
+
     -- Give the messages time to reach the collector
     liftIO $ threadDelay 100000
 

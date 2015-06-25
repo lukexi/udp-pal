@@ -4,14 +4,14 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Exception
 import           Control.Monad
-import           Data.ByteString           (ByteString)
-import           Data.Set                  (Set)
-import qualified Data.Set                  as Set
-import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
-import           Network.UDP.Pal.Socket
-import           Network.UDP.Pal.Binary
-import           Network.UDP.Pal.Types
+import           Data.ByteString        (ByteString)
+import           Data.Set               (Set)
+import qualified Data.Set               as Set
 import           Halive.Concurrent
+import           Network.Socket         hiding (recv, recvFrom, send, sendTo)
+import           Network.UDP.Pal.Binary
+import           Network.UDP.Pal.Socket
+import           Network.UDP.Pal.Types
 
 echoServer :: HostName -> PortNumber -> Int -> IO ()
 echoServer serverName serverPort packetSize = void . forkIO' $ do
@@ -23,18 +23,18 @@ echoServer serverName serverPort packetSize = void . forkIO' $ do
   flip finally (close (bsSocket incomingSocket)) . forever $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
-    putStrLn $ "Received from: " ++ show fromAddr 
+    putStrLn $ "Received from: " ++ show fromAddr
       ++ ": " ++ (decode' newMessage :: String)
 
     -- Launch a thread to speak to the client if they're new
-    registerClient broadcastChan clients fromAddr    
+    registerClient broadcastChan clients fromAddr
 
     -- Broadcast the message to all clients
     atomically $ writeTChan broadcastChan newMessage
 
 registerClient :: TChan ByteString -> MVar (Set SockAddr) -> SockAddr -> IO ()
 registerClient broadcastChan clients fromAddr =
-  modifyMVar_ clients $ \currentClients -> 
+  modifyMVar_ clients $ \currentClients ->
     if Set.member fromAddr currentClients
     then return currentClients
     else do
@@ -61,7 +61,7 @@ newClientThread clientAddr messageChan clients = forkIO' $ do
         modifyMVar_ clients $ return . Set.delete clientAddr
         throwIO e
 
-  handle finisher . forever $ do    
+  handle finisher . forever $ do
     message <- atomically $ readTChan messageChan
     putStrLn $ "Sending to " ++ displayName ++ ": " ++ (decode' message :: String)
     _bytesSent <- sendConn toClientSock message

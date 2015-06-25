@@ -1,9 +1,9 @@
-import Control.Concurrent
-import Control.Exception
-import Control.Monad
+import           Control.Concurrent
+import           Control.Exception
+import           Control.Monad
 
-import Network.UDP.Pal
-import Halive.Concurrent
+import           Halive.Concurrent
+import           Network.UDP.Pal
 
 serverPort :: PortNumber
 serverPort = 3000
@@ -21,7 +21,7 @@ launchClient = forkIO' $ do
 
   -- Send a hello message to the server
   let message = "HELLO THERE FROM " ++ displayName ++ "!"
-  _bytesSent <- sendEncoded client message
+  _bytesSent <- sendBinary client message
 
   -- Begin a receive loop for this client
   flip finally (close (bsSocket (swdBoundSocket client))) . forever $ do

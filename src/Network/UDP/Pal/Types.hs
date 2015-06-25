@@ -1,10 +1,10 @@
 module Network.UDP.Pal.Types where
 
-import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
+import           Network.Socket hiding (recv, recvFrom, send, sendTo)
 
 data BoundSocket = BoundSocket
-  { bsSocket :: Socket
-  , bsPacketSize :: Int 
+  { bsSocket     :: Socket
+  , bsPacketSize :: Int
   } deriving Show
 
 data SocketWithDest = SocketWithDest

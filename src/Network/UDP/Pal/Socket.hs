@@ -1,14 +1,14 @@
 {-# LANGUAGE RecordWildCards #-}
 module Network.UDP.Pal.Socket where
 
-import Control.Monad.Trans
-import Data.Binary
+import           Control.Concurrent
+import           Control.Monad.Trans
+import           Data.Binary
+import           Data.ByteString           (ByteString)
 import           Network.Socket            hiding (recv, recvFrom, send, sendTo)
 import           Network.Socket.ByteString
-import Control.Concurrent
-import Network.UDP.Pal.Binary
-import Network.UDP.Pal.Types
-import Data.ByteString (ByteString)
+import           Network.UDP.Pal.Binary
+import           Network.UDP.Pal.Types
 
 -- | Create a socket bound to our IP and the given port
 -- that can send to and receive from anywhere.
@@ -40,12 +40,12 @@ socketWithDest destName destPort packetSize = do
     , swdDestination = serverAddrInfo
     }
 
-sendEncoded :: (MonadIO m, Binary a) => SocketWithDest -> a -> m Int
-sendEncoded SocketWithDest{..} = 
+sendBinary :: (MonadIO m, Binary a) => SocketWithDest -> a -> m Int
+sendBinary SocketWithDest{..} =
   sendBinaryTo (bsSocket swdBoundSocket) (addrAddress swdDestination)
 
 sendRaw :: MonadIO m => SocketWithDest -> ByteString -> m Int
-sendRaw SocketWithDest{..} bytestring = 
+sendRaw SocketWithDest{..} bytestring =
   liftIO $ sendTo (bsSocket swdBoundSocket) bytestring (addrAddress swdDestination)
 
 receiveFromDecoded :: (MonadIO m, Binary a) => BoundSocket -> m (a, SockAddr)
@@ -59,7 +59,7 @@ receiveFromRaw BoundSocket{..} = liftIO $ recvFrom bsSocket bsPacketSize
 -- (getAddrInfo always returns a non-empty list, or throws an exception)
 addressInfo :: Maybe HostName -> Maybe ServiceName -> IO AddrInfo
 addressInfo address port = head <$> getAddrInfo hints address port
-  where 
+  where
     -- AI_PASSIVE means to get our current IP if none provided
     hints = Just $ defaultHints { addrFlags = [AI_PASSIVE], addrFamily = AF_INET }
 

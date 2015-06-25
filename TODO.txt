@@ -21,3 +21,9 @@ TODAY:
     cubes after they've existed for x seconds, and same with server.
 
 [ ] Get OpenAL basics working, then try streaming libpd to it.
+
+
+
+Links:
+Enet, UDT, RakNet, and the 'Reliable UDP' protocol
+http://ithare.com/64-network-dos-and-donts-for-game-engines-part-iv-great-tcp-vs-udp-debate/#rabbitref-Reliable%20UDP

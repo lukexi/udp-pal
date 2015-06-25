@@ -1,5 +1,5 @@
-import Network.UDP.Pal
-import Shared
+import           Network.UDP.Pal
+import           Shared
 
 main :: IO ()
 main = do

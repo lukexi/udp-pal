@@ -1,10 +1,9 @@
-import Control.Concurrent
-import Control.Exception
-import Control.Monad
+import           Control.Exception
+import           Control.Monad
 
-import Network.UDP.Pal
-import Shared
-import Halive.Concurrent
+import           Halive.Concurrent
+import           Network.UDP.Pal
+import           Shared
 
 main :: IO ()
 main = do
@@ -17,7 +16,7 @@ main = do
   _ <- forkIO' . forever $ do
     -- Send a hello message to the server
     let message = "HELLO THERE FROM " ++ displayName ++ "!"
-    _bytesSent <- sendEncoded socket message
+    _bytesSent <- sendBinary socket message
     threadDelaySec 0.5
 
 

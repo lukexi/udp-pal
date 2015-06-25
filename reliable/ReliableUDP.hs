@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module ReliableUDP where
@@ -13,7 +13,6 @@ import qualified Data.Map as Map
 import Types
 import Network.UDP.Pal
 import Control.Concurrent
-import Data.ByteString (ByteString)
 import Data.Monoid
 import Data.Maybe
 
@@ -35,12 +34,12 @@ receiveAck seqNum = do
   connUnacked .= larger
 
 
-sendReliable :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (Connection a b) m) 
+sendReliable :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (Connection a b) m)
              => SocketWithDest -> b -> m ()
 sendReliable client message = do
   reliablePackets <- queueReliable message
   forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
-    sendEncoded client ((ReliablePacket seqNum payload) :: Packet a b)
+    sendBinary client (ReliablePacket seqNum payload :: Packet a b)
 
 
 -------------
@@ -58,20 +57,16 @@ makeCollector = liftIO $ UnreliableCollector <$> newMVar Map.empty
 
 collectUnreliablePacket :: MonadIO m => UnreliableCollector a -> BundleNum -> a -> m ()
 collectUnreliablePacket collector bundleNum payload = liftIO $
-  modifyMVar_ (urcCollection collector) $ 
+  modifyMVar_ (urcCollection collector) $
     return . Map.insertWith (<>) bundleNum [payload]
 
 -- | Called by the app when it's ready for the packets in a given bundle number
--- As we're unreliable, some or all of these may be missing, so the app must be 
+-- As we're unreliable, some or all of these may be missing, so the app must be
 -- designed around that.
 -- Returns a list of all packets received with the given bundle number,
 -- and discards any older messages than that
 extractBundle :: MonadIO m => UnreliableCollector a -> BundleNum -> m [a]
-extractBundle collector bundleNum = liftIO $ do
+extractBundle collector bundleNum = liftIO $
   modifyMVar (urcCollection collector) $ \c -> do
     let (_lower, result, higher) = Map.splitLookup bundleNum c
     return (higher, fromMaybe [] result)
-
-
-
-
