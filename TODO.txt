@@ -1,12 +1,12 @@
 TODAY:
 
-[ ] Integrated test of sending both reliable cube commands 
+[x] Integrated test of sending both reliable cube commands
     (create this cube, change color to this hue, etc.)
     (send each cube creation, then its color change)
     and unreliable cube commands (change this cube's pose)
-      (it must be accounted for that these may 
+      (it must be accounted for that these may
       appear out of order to reliable commands,
-      and thus could appear 
+      and thus could appear
       before/after creation/destruction)
     A big grid of cubes would be great, like
     CreateCube 0
@@ -23,6 +23,32 @@ TODAY:
 [ ] Get OpenAL basics working, then try streaming libpd to it.
 
 
+Client sends hand and head updates unreliably to the server.
+Server receives all these and broadcasts every frame to the all clients.
+Client sends reliable "create cube" updates to the server.
+Server re-broadcasts these to clients, and also starts physics sim
+to send unreliable updates and expiration timer to send reliable "DeleteCube" message.
+
+Server is running
+  message accept loop
+  send-threads for each client
+  physics sim loop
+    receives from clients
+    simulate
+    broadcasts to clients
+
+Client is running
+  message accept loop
+  render loop
+    receive messages
+    receive input
+    simulate
+    render
+    send updates to server
+
+How to do the numbering of unreliable packets so that we get a small buffer?
+
+Just get the highest minus some number, and the lowest if that is not available?
 
 Links:
 Enet, UDT, RakNet, and the 'Reliable UDP' protocol

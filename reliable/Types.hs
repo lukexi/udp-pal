@@ -12,9 +12,9 @@ import           GHC.Generics
 -- until we receive acknowledgement of their receipt.
 
 newtype SeqNum = SeqNum
-  { unSeqNum :: Int } deriving (Eq, Show, Ord, Num, Binary)
+  { unSeqNum :: Int } deriving (Eq, Show, Ord, Num, Enum, Binary)
 newtype BundleNum = BundleNum
-  { unBundleNum :: Int } deriving (Eq, Show, Ord, Num, Binary)
+  { unBundleNum :: Int } deriving (Eq, Show, Ord, Num, Enum, Binary)
 
 
 data Packet u r = UnreliablePacket  BundleNum u
@@ -27,11 +27,12 @@ instance (Binary u, Binary r) => Binary (Packet u r)
 -- The data necessary to track the retransmission of
 -- unacknowledged reliable packets.
 data Connection u r = Connection
-  { _connNextSeqNum :: SeqNum
-  , _connUnacked    :: Map SeqNum r
+  { _connNextSeqNumTo   :: SeqNum
+  , _connNextSeqNumFrom :: SeqNum
+  , _connUnacked        :: Map SeqNum r
   }
 
 makeLenses ''Connection
 
 newConnection :: (Binary u, Binary r) => Connection u r
-newConnection = Connection 0 mempty
+newConnection = Connection 0 0 mempty

@@ -15,13 +15,14 @@ import Network.UDP.Pal
 import Control.Concurrent
 import Data.Monoid
 import Data.Maybe
+import Data.ByteString (ByteString)
 
 -----------
 -- Reliable
 -----------
 queueReliable :: (MonadIO m, MonadState (Connection u r) m, Binary r) => r -> m (Map SeqNum r)
 queueReliable payload = do
-  seqNum <- connNextSeqNum <<+= 1
+  seqNum <- connNextSeqNumTo <<%= succ
   connUnacked . at seqNum ?= payload
   use connUnacked
 

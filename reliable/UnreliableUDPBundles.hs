@@ -67,5 +67,5 @@ main = do
     liftIO $ threadDelay 100000
 
     -- Receive one frame of data
-    results <- liftIO $ Map.fromList . map decode' <$> collectBundle collection bundleNum
+    results <- liftIO $ Map.fromList <$> extractBundle collection bundleNum
     liftIO $ print (results :: Map Int Int)
