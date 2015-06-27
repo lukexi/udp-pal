@@ -29,10 +29,12 @@ instance (Binary u, Binary r) => Binary (Packet u r)
 data Connection u r = Connection
   { _connNextSeqNumTo   :: SeqNum
   , _connNextSeqNumFrom :: SeqNum
+  , _connNextBundleNum  :: BundleNum
   , _connUnacked        :: Map SeqNum r
+  , _connBundles        :: Map BundleNum [u]
   }
 
 makeLenses ''Connection
 
 newConnection :: (Binary u, Binary r) => Connection u r
-newConnection = Connection 0 0 mempty
+newConnection = Connection 0 0 0 mempty mempty

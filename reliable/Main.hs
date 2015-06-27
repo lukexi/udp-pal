@@ -18,18 +18,42 @@ import           Halive.Concurrent
 
 import           Data.Binary
 import           GHC.Generics
-import           Network.Socket (SockAddr)
+-- import           Network.Socket (SockAddr)
 import           Control.Lens
-import           Data.Monoid
-import           Data.Map (Map)
+-- import           Data.Map (Map)
 import qualified Data.Map as Map
+-- import System.Mem.Weak
 
+{-
+
+[x] Use a small sliding window for unreliable messages,
+    e.g. [0,1,2,3,4] are all being assembled, and when we see 5, kick out 0 to always keep 5 values in the buffer.
+    Maybe when we kick it out, we should place it in the verifiedPackets queue, rather than exposing the collector?
+    Then we can keep all receiver state in the Connection type.
+    (and we don't need the collector in an MVar)
+
+[x] If we use a list for unreliable packets we can send them into the receiver's outgoing channel
+    and add our own bundleID, splitting them up into multiple messages inside the receiver.
+
+[x] Have outgoingPackets use Reliable | Unreliable sum type
+
+Also, we should have a way to bypass the collector on the server side and just broadcast
+certain unreliable messages straight out - specifically pose data from players - to avoid
+adding any latency to them.
+(consider how this will interact with physics updates, though; 
+it may make things look unsynchronized which might be worse than latency)
+
+Also add keepalive checks for kicking out clients while we're here.
+
+-}
 
 type ObjectID = Int
+
 data ObjectOp
   = CreateObject ObjectID
   | NameObject ObjectID String
   deriving (Show, Generic, Binary)
+
 data ObjectPose
   = ObjectPose ObjectID
   deriving (Show, Generic, Binary)
@@ -58,19 +82,7 @@ launchServer = forkIO' $ do
               return (Map.insert fromAddr client currentClients, client)
       newServerToClientThread fromAddr = do
         toClientSock <- connectedSocketToAddr fromAddr
-        
-        incomingPackets <- newTChanIO
-        outgoingPackets <- newTChanIO
-        verifiedPackets <- newTChanIO
-        let ackReliablePacket = (sendBinaryConn toClientSock :: Packet ObjectPose ObjectOp -> IO Int)
-        unreliableCollector <- createReceiver
-          (fst <$> atomically (readTChan incomingPackets))
-          outgoingPackets
-          (atomically . writeTChan verifiedPackets)
-          ackReliablePacket
-          (sendReliableConn toClientSock)
-
-        return incomingPackets
+        createReceiver "Server" (Right toClientSock)
 
 
 
@@ -78,43 +90,70 @@ launchServer = forkIO' $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
     
-    incomingPackets <- findClient fromAddr
+    (incomingRawPackets, verifiedPackets, outgoingPackets) <- findClient fromAddr
 
     let packet = decode' newMessage :: Packet ObjectPose ObjectOp
+    atomically $ writeTChan incomingRawPackets packet
+
     liftIO . putStrLn $ "Received from: " ++ show fromAddr
-      ++ ": " ++ show packet
-
-    atomically $ writeTChan incomingPackets (packet, fromAddr)
+                        ++ ": " ++ show packet
 
 
+    print =<< atomically (exhaustChan verifiedPackets)
+    -- atomically $ writeTChan outgoingPackets (Reliable (NameObject 42 "Oh hey!"))
 
+data Outgoing u r = Unreliable [u] | Reliable r deriving Show
 
-
-
-createReceiver :: Monoid a 
-               => IO (Packet a2 t)
-               -> TChan a1
-               -> (t -> IO ())
-               -> (Packet ObjectPose ObjectOp -> IO a3)
-               -> (a1 -> StateT (Connection ObjectPose ObjectOp) IO a)
-               -> IO (UnreliableCollector a2)
-createReceiver incomingPackets outgoingPackets returnPacket ackReliablePacket sendReliablePacket = do
+createReceiver :: String
+               -> Either SocketWithDest ConnectedSocket
+               -> IO
+                  (TChan (Packet   ObjectPose r),
+                   TChan (Outgoing ObjectPose r),
+                   TChan (Outgoing ObjectPose ObjectOp))
+createReceiver name eitherSocket = do
+  incomingRawPackets  <- newTChanIO
+  verifiedPackets     <- newTChanIO
+  outgoingPackets     <- newTChanIO
+  
   let conn = newConnection :: Connection ObjectPose ObjectOp
-  unreliableCollector <- makeCollector
+      sendReliablePacket    = either sendReliable sendReliableConn eitherSocket
+      sendUnreliablePacket  = either sendBinary   sendBinaryConn   eitherSocket
+
   _threadID <- forkIO' . void . flip runStateT conn . forever $ do
-    _ <- readChanAll outgoingPackets sendReliablePacket
-    liftIO $ putStrLn "awaiting packett"
-    packet <- liftIO incomingPackets
-    case packet of
-      UnreliablePacket bundleNum payload ->
-        collectUnreliablePacket unreliableCollector bundleNum payload
+    liftIO $ putStrLn $ name ++ " awaiting packet"
+
+    (outgoing, incoming) <- liftIO . atomically $ do
+      outgoing <- exhaustChan outgoingPackets
+      packet   <- exhaustChan incomingRawPackets
+      case (outgoing, packet) of
+        ([], []) -> retry
+        (someOutgoing, someIncoming) -> return (someOutgoing, someIncoming)
+
+    forM_ (outgoing :: [Outgoing ObjectPose ObjectOp]) $ \case
+      Reliable reliablePacket -> sendReliablePacket reliablePacket
+      Unreliable unreliableBundle -> do
+        bundleNum <- connNextBundleNum <<%= succ
+        liftIO $ forM_ unreliableBundle $ \piece ->
+          sendUnreliablePacket (UnreliablePacket bundleNum piece :: Packet ObjectPose ObjectOp)
+    
+    forM_ incoming $ \case
+      UnreliablePacket bundleNum payload -> do
+        maybeBundle <- collectUnreliablePacket bundleNum payload
+        case maybeBundle of
+          Nothing -> return ()
+          Just bundle -> liftIO . atomically . writeTChan verifiedPackets $ Unreliable bundle
       ReliablePacket seqNum payload ->
         collectReliablePacket seqNum $ liftIO $ do
-          _ <- ackReliablePacket (ReliablePacketAck seqNum :: Packet ObjectPose ObjectOp)
-          liftIO $ returnPacket payload
+          
+          _ <- sendUnreliablePacket (ReliablePacketAck seqNum :: Packet ObjectPose ObjectOp)
+          liftIO . atomically . writeTChan verifiedPackets $ Reliable payload
       ReliablePacketAck seqNum ->
         receiveAck seqNum
-  return unreliableCollector
+  return 
+    ( incomingRawPackets  -- Channel to pipe in raw packets from the socket; 
+    , verifiedPackets     -- Channel to get out sequenced reliable packets and bundled unreliable packets
+    , outgoingPackets     -- Channel to write packets to send along
+    )
 
 
 -- | Given the seqNum of a newly-received reliable packet,
@@ -135,51 +174,34 @@ main = do
   toServerSock <- socketWithDest serverName serverPort packetSize
   displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
   putStrLn $ "*** Launched client: " ++ displayName
+  
+  (incomingRawPackets, verifiedPackets, outgoingPackets) <- createReceiver "Client" (Left toServerSock)
 
-  incomingPackets <- channelize (receiveFromDecoded (swdBoundSocket toServerSock) :: IO (Packet ObjectPose ObjectOp, SockAddr))
-  outgoingPackets <- newTChanIO
-  verifiedPackets <- newTChanIO
-  let ackReliablePacket = (sendBinary toServerSock :: Packet ObjectPose ObjectOp -> IO Int)
-  unreliableCollector <- createReceiver
-    (fst <$> atomically (readTChan incomingPackets))
-    outgoingPackets
-    (atomically . writeTChan verifiedPackets)
-    ackReliablePacket
-    (sendReliable toServerSock)
-    
+  -- Stream received packets into the Receiver's packetsIn channel
+  streamInto incomingRawPackets (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (Packet ObjectPose ObjectOp))
 
-  forever . flip runStateT 0 $ do
+  forever $ do
 
-    liftIO . atomically $ writeTChan outgoingPackets (NameObject 0 "hello")
-    liftIO . print =<< extractBundle unreliableCollector =<< id <<%= succ
+    liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 0 "hello"))
+    liftIO $ print =<< atomically (exhaustChan verifiedPackets)
 
-    liftIO . atomically $ writeTChan outgoingPackets (NameObject 1 "sailor")
-    liftIO . print =<< extractBundle unreliableCollector =<< id <<%= succ
+    liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 1 "sailor"))
+    liftIO $ print =<< atomically (exhaustChan verifiedPackets)
 
-    liftIO . atomically $ writeTChan outgoingPackets (NameObject 2 "!!!")
-    liftIO . print =<< extractBundle unreliableCollector =<< id <<%= succ
+    liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 2 "!!!"))
+    liftIO $ print =<< atomically (exhaustChan verifiedPackets)
 
     liftIO $ threadDelay 1000000
 
+streamInto :: TChan a -> IO a -> IO ()
+streamInto channel action = 
+  -- FIXME find a reliable way to kill this thread
+  void . forkIO . forever $ 
+    atomically . writeTChan channel =<< action
 
-
-
--- | Converts a blocking action into a channel
-channelize :: (MonadIO m) => IO a -> m (TChan a)
-channelize action = liftIO $ do
-  messageChan <- newTChanIO
-  
-  _threadID <- forkIO . forever $ 
-    atomically . writeTChan messageChan =<< action
-  -- FIXME associate the threadID with a finalizer to kill the thread when the channel is GCd
-
-  return messageChan
-
-readChanAll :: (MonadIO m, Monoid b) => TChan a -> (a -> m b) -> m b
-readChanAll chan action = go mempty 
+exhaustChan :: TChan a -> STM [a]
+exhaustChan chan = go mempty 
   where 
-    go !accum = liftIO (atomically (tryReadTChan chan)) >>= \case
-      Just msg -> do
-        r <- action msg
-        go (r <> accum)
+    go !accum = tryReadTChan chan >>= \case
+      Just msg -> go (accum ++ [msg])
       Nothing -> return accum
