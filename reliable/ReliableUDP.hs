@@ -37,11 +37,17 @@ receiveAck seqNum = do
 
 sendReliable :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (Connection a b) m)
              => SocketWithDest -> b -> m ()
-sendReliable client message = do
+sendReliable sock message = do
   reliablePackets <- queueReliable message
   forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
-    sendBinary client (ReliablePacket seqNum payload :: Packet a b)
+    sendBinary sock (ReliablePacket seqNum payload :: Packet a b)
 
+sendReliableConn :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (Connection a b) m)
+                 => ConnectedSocket -> b -> m ()
+sendReliableConn sock message = do
+  reliablePackets <- queueReliable message
+  forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
+    sendBinaryConn sock (ReliablePacket seqNum payload :: Packet a b)
 
 -------------
 -- Unreliable

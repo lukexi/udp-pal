@@ -18,9 +18,12 @@ import           Halive.Concurrent
 
 import           Data.Binary
 import           GHC.Generics
-import Network.Socket (SockAddr)
-import Control.Lens
-import Data.Monoid
+import           Network.Socket (SockAddr)
+import           Control.Lens
+import           Data.Monoid
+import           Data.Map (Map)
+import qualified Data.Map as Map
+
 
 type ObjectID = Int
 data ObjectOp
@@ -45,36 +48,62 @@ launchServer = forkIO' $ do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   let finallyClose = flip finally (close (bsSocket incomingSocket))
 
+  clients <- newMVar mempty
+  let findClient fromAddr = do
+        modifyMVar clients $ \currentClients -> do
+          case Map.lookup fromAddr currentClients of
+            Just client -> return (currentClients, client)
+            Nothing     -> do
+              client <- newServerToClientThread fromAddr
+              return (Map.insert fromAddr client currentClients, client)
+      newServerToClientThread fromAddr = do
+        toClientSock <- connectedSocketToAddr fromAddr
+        
+        incomingPackets <- newTChanIO
+        outgoingPackets <- newTChanIO
+        verifiedPackets <- newTChanIO
+        let ackReliablePacket = (sendBinaryConn toClientSock :: Packet ObjectPose ObjectOp -> IO Int)
+        unreliableCollector <- createReceiver
+          (fst <$> atomically (readTChan incomingPackets))
+          outgoingPackets
+          (atomically . writeTChan verifiedPackets)
+          ackReliablePacket
+          (sendReliableConn toClientSock)
+
+        return incomingPackets
+
 
 
   finallyClose . void . forever $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
-    toClientSock <- connectedSocketToAddr fromAddr
+    
+    incomingPackets <- findClient fromAddr
 
     let packet = decode' newMessage :: Packet ObjectPose ObjectOp
     liftIO . putStrLn $ "Received from: " ++ show fromAddr
       ++ ": " ++ show packet
 
+    atomically $ writeTChan incomingPackets (packet, fromAddr)
 
 
 
 
 
-createReceiver :: forall a a1 t a2 a3.
-                Monoid a =>
-                IO (Packet a2 t)
-                -> TChan a1
-                -> (t -> IO ())
-                -> (Packet ObjectPose ObjectOp -> IO a3)
-                -> (a1 -> StateT (Connection ObjectPose ObjectOp) IO a)
-                -> IO (UnreliableCollector a2)
+
+createReceiver :: Monoid a 
+               => IO (Packet a2 t)
+               -> TChan a1
+               -> (t -> IO ())
+               -> (Packet ObjectPose ObjectOp -> IO a3)
+               -> (a1 -> StateT (Connection ObjectPose ObjectOp) IO a)
+               -> IO (UnreliableCollector a2)
 createReceiver incomingPackets outgoingPackets returnPacket ackReliablePacket sendReliablePacket = do
   let conn = newConnection :: Connection ObjectPose ObjectOp
   unreliableCollector <- makeCollector
   _threadID <- forkIO' . void . flip runStateT conn . forever $ do
     _ <- readChanAll outgoingPackets sendReliablePacket
-
+    liftIO $ putStrLn "awaiting packett"
     packet <- liftIO incomingPackets
     case packet of
       UnreliablePacket bundleNum payload ->
@@ -103,20 +132,20 @@ main = do
   killThreads
   _           <- launchServer
 
-  client      <- socketWithDest serverName serverPort packetSize
-  displayName <- show <$> getSocketName (bsSocket (swdBoundSocket client))
+  toServerSock <- socketWithDest serverName serverPort packetSize
+  displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
   putStrLn $ "*** Launched client: " ++ displayName
 
-  incomingPackets <- channelize (receiveFromDecoded (swdBoundSocket client) :: IO (Packet ObjectPose ObjectOp, SockAddr))
+  incomingPackets <- channelize (receiveFromDecoded (swdBoundSocket toServerSock) :: IO (Packet ObjectPose ObjectOp, SockAddr))
   outgoingPackets <- newTChanIO
   verifiedPackets <- newTChanIO
-  let ackReliablePacket = (sendBinary client :: Packet ObjectPose ObjectOp -> IO Int)
+  let ackReliablePacket = (sendBinary toServerSock :: Packet ObjectPose ObjectOp -> IO Int)
   unreliableCollector <- createReceiver
     (fst <$> atomically (readTChan incomingPackets))
     outgoingPackets
     (atomically . writeTChan verifiedPackets)
     ackReliablePacket
-    (sendReliable client)
+    (sendReliable toServerSock)
     
 
   forever . flip runStateT 0 $ do
