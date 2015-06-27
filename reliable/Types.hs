@@ -23,6 +23,8 @@ data Packet u r = UnreliablePacket  BundleNum u
                 deriving (Show, Generic)
 instance (Binary u, Binary r) => Binary (Packet u r)
 
+-- A tag for submitting
+data Outgoing u r = Unreliable [u] | Reliable r deriving Show
 
 -- The data necessary to track the retransmission of
 -- unacknowledged reliable packets.
@@ -38,3 +40,19 @@ makeLenses ''Connection
 
 newConnection :: (Binary u, Binary r) => Connection u r
 newConnection = Connection 0 0 0 mempty mempty
+
+
+---
+-- Move these back to main after getting Receiver working generically
+
+type ObjectID = Int
+
+data ObjectOp
+  = CreateObject ObjectID
+  | NameObject ObjectID String
+  deriving (Show, Generic)
+instance Binary ObjectOp
+data ObjectPose
+  = ObjectPose ObjectID
+  deriving (Show, Generic)
+instance Binary ObjectPose

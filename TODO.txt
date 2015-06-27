@@ -1,5 +1,32 @@
 TODAY:
 
+[x] Use a small sliding window for unreliable messages,
+    e.g. [0,1,2,3,4] are all being assembled, and when we see 5, kick out 0 to always keep 5 values in the buffer.
+    Maybe when we kick it out, we should place it in the verifiedPackets queue, rather than exposing the collector?
+    Then we can keep all receiver state in the Connection type.
+    (and we don't need the collector in an MVar)
+
+[x] If we use a list for unreliable packets we can send them into the receiver's outgoing channel
+    and add our own bundleID, splitting them up into multiple messages inside the receiver.
+
+[x] Have outgoingPackets use Reliable | Unreliable sum type
+
+[ ] We should have a way to bypass the collector on the server side and just broadcast
+    certain unreliable messages straight out - specifically pose data from players - to avoid
+    adding any latency to them.
+    (consider how this will interact with physics updates, though;
+    it may make things look unsynchronized which might be worse than latency)
+
+[ ] Add keepalive checks for kicking out clients while we're here.
+
+
+
+
+
+
+
+YESTERDAY:
+
 [x] Integrated test of sending both reliable cube commands
     (create this cube, change color to this hue, etc.)
     (send each cube creation, then its color change)

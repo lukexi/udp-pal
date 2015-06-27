@@ -12,10 +12,10 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import Types
 import Network.UDP.Pal
-import Control.Concurrent
+-- import Control.Concurrent
 import Data.Monoid
-import Data.Maybe
-import Data.ByteString (ByteString)
+-- import Data.Maybe
+-- import Data.ByteString (ByteString)
 
 -----------
 -- Reliable
@@ -49,16 +49,27 @@ sendReliableConn sock message = do
   forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
     sendBinaryConn sock (ReliablePacket seqNum payload :: Packet a b)
 
+-- | Given the seqNum of a newly-received reliable packet,
+-- checkes if the seqNum is the successor of the last one we received.
+-- If so, records the new seqNum and calls the given action; otherwise, does nothing.
+collectReliablePacket :: MonadState (Connection u r) m
+                      => SeqNum -> m () -> m ()
+collectReliablePacket seqNum action = do
+  nextSeqNumFrom <- use connNextSeqNumFrom
+  when (seqNum == nextSeqNumFrom) $ do
+    connNextSeqNumFrom %= succ
+    action
+
 -------------
 -- Unreliable
 -------------
-collectUnreliablePacket :: MonadState (Connection u r) m 
-                        => BundleNum 
-                        -> u 
+collectUnreliablePacket :: MonadState (Connection u r) m
+                        => BundleNum
+                        -> u
                         -> m (Maybe [u])
 collectUnreliablePacket bundleNum payload = do
   newBundles <- connBundles <%= Map.insertWith (<>) bundleNum [payload]
-  if Map.size newBundles < 5 
+  if Map.size newBundles < 5
     then return Nothing
     else do
       let ((_oldestBundleNum, oldestBundle), bundlesMinusOldest) = Map.deleteFindMin newBundles
