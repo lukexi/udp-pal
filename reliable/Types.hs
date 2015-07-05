@@ -17,7 +17,7 @@ makeLenses ''Pose
 type ObjectID = Int
 
 data ObjectOp
-  = CreateObject ObjectID
+  = CreateObject ObjectID Pose
   | NameObject ObjectID String
   deriving (Show, Generic)
 instance Binary ObjectOp

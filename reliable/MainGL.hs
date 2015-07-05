@@ -124,19 +124,19 @@ launchServer = forkIO' $ do
     -- Process new packets
     packets <- liftIO . atomically $ exhaustChan packetsFromClients
     forM_ packets $ \case
-      Reliable   (NameObject newCubeID _name) -> do
-        id . at newCubeID ?= Pose 0 (axisAngle (V3 0 1 0) 0)
-      Reliable (CreateObject _) -> do
-        liftIO . putStrLn $ "CreateObject"
+      Reliable   (CreateObject newCubeID pose) -> do
+        id . at newCubeID ?= pose
       Unreliable _poses -> do
         return ()
 
     -- Run physics
-    id . traversed . posOrientation *= axisAngle (V3 0 1 0) 0
+    id . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
     cubes <- use $ id . to Map.toList
     let poses = map (\(cubeID, pose) -> ObjectPose cubeID pose) cubes
+    --liftIO . putStrLn $ "Sending: " ++ show poses
     liftIO . atomically $ writeTChan broadcastChan (Unreliable poses)
-    return ()
+
+    liftIO $ threadDelay (1000000 `div` 60)
 
 
 main :: IO ()
@@ -166,15 +166,16 @@ main = do
 
   useProgram (program cube)
 
-  let newWorld = Map.singleton (0::ObjectID) $ 
-        Pose { _posPosition = 0, _posOrientation = axisAngle (V3 0 1 0) 1 }
+  --let newWorld = Map.singleton (0::ObjectID) $ Pose { _posPosition = 0, _posOrientation = axisAngle (V3 0 1 0) 1 }
+  let newWorld = mempty
 
-  void . flip runStateT newWorld . forever $ do
+  void . flip runStateT newWorld . whileWindow window $ do
     -- Process network events
     liftIO (atomically (exhaustChan verifiedPackets)) >>= mapM_ (\case
-        Reliable (NameObject objID name) -> liftIO $ print (NameObject objID name)
-        Reliable other                   -> liftIO $ print other
-        Unreliable unrel                 -> liftIO $ print unrel
+        Reliable (CreateObject objID pose) -> liftIO $ print (CreateObject objID pose)
+        Unreliable unrel                 -> forM_ unrel $ \(ObjectPose objID pose) -> do
+          --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
+          id . at objID ?= pose
       )
 
     -- Process UI events
@@ -182,10 +183,10 @@ main = do
       MouseButton _ MouseButtonState'Pressed _ -> do
         newCubeID <- liftIO randomIO
         randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
-
+        let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
         -- We should use our quasi-free monad thing here.
-        id . at newCubeID ?= Pose randomPos (axisAngle (V3 0 1 0) 0)
-        liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject newCubeID "hello"))
+        id . at newCubeID ?= pose
+        liftIO . atomically $ writeTChan outgoingPackets (Reliable (CreateObject newCubeID pose))
       _ -> return ()
 
 
