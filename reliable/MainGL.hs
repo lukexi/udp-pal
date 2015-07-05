@@ -17,16 +17,17 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Exception
 import qualified Data.Map               as Map
-import           Data.Map               (Map)
+--import           Data.Map               (Map)
 import           Halive.Concurrent
-import           Control.Lens
+import           Control.Lens hiding (view)
 import           Graphics.UI.GLFW.Pal
 import           Graphics.GL.Pal2
 import           Graphics.GL
 import           Linear
-import GHC.Generics
+import GHC.Generics (Generic)
 import Data.Binary
 import Data.Maybe
+import System.Random
 
 data Pose = Pose
   { _posPosition    :: V3 GLfloat
@@ -85,7 +86,7 @@ packetSize :: Int
 packetSize = 4096
 
 resX, resY :: Int
-(resX, resY) = (1024, 768)
+resX=1024; resY=768
 
 launchServer :: IO ThreadId
 launchServer = forkIO' $ do
@@ -107,11 +108,15 @@ launchServer = forkIO' $ do
 
         broadcastsToClient <- atomically $ dupTChan broadcastChan
         (incomingRawPackets, verifiedPackets, outgoingPackets) <- createReceiver "Server" (Right toClientSock)
-        threadID1 <- streamInto broadcastChan (atomically . readTChan $ verifiedPackets)
-        threadID2 <- streamInto outgoingPackets (atomically . readTChan $ broadcastsToClient)
+        -- Send all verified packets to all clients
+        -- TODO filter out each client's own messages
+        -- TODO kill these with the client
+        _threadID1 <- streamInto broadcastChan (atomically . readTChan $ verifiedPackets)
+        -- Send all broadcasts to this client
+        _threadID2 <- streamInto outgoingPackets (atomically . readTChan $ broadcastsToClient)
         return incomingRawPackets 
-
-  finallyClose . void . forever $ do
+  -- Launch the server router thread to route packets to their client's receivers
+  _ <- forkIO . finallyClose . void . forever $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
 
@@ -121,6 +126,24 @@ launchServer = forkIO' $ do
     -- Pass the decoded packet into the client's Receiver's incomingRawPackets channel
     let packet = decode' newMessage :: Packet ObjectPose ObjectOp
     atomically $ writeTChan incomingRawPackets packet
+
+  -- Launch the server's main thread to run physics simulations
+  packetsFromClients <- atomically $ dupTChan broadcastChan
+  void . flip runStateT mempty . forever $ do
+    -- Process new packets
+    packets <- liftIO . atomically $ exhaustChan packetsFromClients
+    forM_ packets $ \case
+      Reliable   (NameObject newCubeID _name) -> do
+        id . at newCubeID ?= Pose 0 (axisAngle (V3 0 1 0) 0)
+      Unreliable _ -> do
+        return ()
+
+    -- Run physics
+    id . traversed . posOrientation *= axisAngle (V3 0 1 0) 0
+    cubes <- use $ id . to Map.toList
+    --forM_ cubes $ \(cubeID, pose) -> sendUnreliable 
+    return ()
+
 
 main :: IO ()
 main = do
@@ -149,11 +172,34 @@ main = do
 
   useProgram (program cube)
 
-  let newWorld = Map.singleton 0 $ 
+  let newWorld = Map.singleton (0::ObjectID) $ 
         Pose { _posPosition = 0, _posOrientation = axisAngle (V3 0 1 0) 1 }
-  forever . flip runStateT newWorld $ do
-    processEvents events $ \e -> return ()
 
+  void . flip runStateT newWorld . forever $ do
+    -- Process network events
+    liftIO (atomically (exhaustChan verifiedPackets)) >>= mapM_ (\case
+        Reliable (NameObject objID name) -> liftIO $ print (NameObject objID name)
+        Reliable other                   -> liftIO $ print other
+        Unreliable unrel                 -> liftIO $ print unrel
+      )
+
+    -- Process UI events
+    processEvents events $ \e -> case e of
+      MouseButton _ MouseButtonState'Pressed _ -> do
+        newCubeID <- liftIO randomIO
+        randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
+
+        -- We should use our quasi-free monad thing here.
+        id . at newCubeID ?= Pose randomPos (axisAngle (V3 0 1 0) 0)
+        liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject newCubeID "hello"))
+      _ -> return ()
+
+
+
+
+    ---------
+    -- Render
+    ---------
     glClear (GL_COLOR_BUFFER_BIT .|. GL_DEPTH_BUFFER_BIT)
   
     projection  <- makeProjection window
@@ -177,17 +223,6 @@ main = do
         drawEntity model projectionView i cube
 
     swapBuffers window
-
-    --liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 0 "hello"))
-    --liftIO $ print =<< atomically (exhaustChan verifiedPackets)
-
-    --liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 1 "sailor"))
-    --liftIO $ print =<< atomically (exhaustChan verifiedPackets)
-
-    --liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 2 "!!!"))
-    --liftIO $ print =<< atomically (exhaustChan verifiedPackets)
-
-
 
 
 

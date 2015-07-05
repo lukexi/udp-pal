@@ -1,5 +1,7 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE LambdaCase   #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Network.UDP.Pal.Reliable.Receiver where
 import           Control.Concurrent.STM
 import           Network.UDP.Pal.Socket
