@@ -3,12 +3,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TemplateHaskell           #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveAnyClass            #-}
 {-# LANGUAGE RecordWildCards           #-}
-
--- import Data.Binary
--- import GHC.Generics
 
 import           Control.Monad.State
 import           Network.UDP.Pal
@@ -24,16 +19,12 @@ import           Graphics.UI.GLFW.Pal
 import           Graphics.GL.Pal2
 import           Graphics.GL
 import           Linear
-import GHC.Generics (Generic)
-import Data.Binary
+
 import Data.Maybe
 import System.Random
 
-data Pose = Pose
-  { _posPosition    :: V3 GLfloat
-  , _posOrientation :: Quaternion GLfloat 
-  } deriving (Generic, Binary, Show)
-makeLenses ''Pose
+
+import Types
 
 {-
 SERVER LOGIC:
@@ -135,13 +126,16 @@ launchServer = forkIO' $ do
     forM_ packets $ \case
       Reliable   (NameObject newCubeID _name) -> do
         id . at newCubeID ?= Pose 0 (axisAngle (V3 0 1 0) 0)
-      Unreliable _ -> do
+      Reliable (CreateObject _) -> do
+        liftIO . putStrLn $ "CreateObject"
+      Unreliable _poses -> do
         return ()
 
     -- Run physics
     id . traversed . posOrientation *= axisAngle (V3 0 1 0) 0
     cubes <- use $ id . to Map.toList
-    --forM_ cubes $ \(cubeID, pose) -> sendUnreliable 
+    let poses = map (\(cubeID, pose) -> ObjectPose cubeID pose) cubes
+    liftIO . atomically $ writeTChan broadcastChan (Unreliable poses)
     return ()
 
 

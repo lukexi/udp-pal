@@ -13,6 +13,7 @@ import           Control.Lens
 import           Control.Monad.State
 import           Halive.Concurrent
 import           Network.UDP.Pal.Reliable.ReliableUDP
+import Data.Binary
 
 streamInto :: TChan a -> IO a -> IO ()
 streamInto channel action =
@@ -27,12 +28,14 @@ exhaustChan chan = go mempty
       Just msg -> go (accum ++ [msg])
       Nothing -> return accum
 
-createReceiver :: String
+createReceiver :: forall u r. 
+                  (Binary u, Binary r) 
+               => String
                -> Either SocketWithDest ConnectedSocket
                -> IO
-                  (TChan (Packet   ObjectPose r),
-                   TChan (Outgoing ObjectPose r),
-                   TChan (Outgoing ObjectPose ObjectOp))
+                  (TChan (Packet   u r),
+                   TChan (Outgoing u r),
+                   TChan (Outgoing u r))
 createReceiver name eitherSocket = do
   verifiedPackets     <- newTChanIO
   outgoingPackets     <- newTChanIO
@@ -43,15 +46,17 @@ createReceiver name eitherSocket = do
     , outgoingPackets     -- Channel to write packets to send along
     )
 
-createReceiverWithChannels :: String
+createReceiverWithChannels :: forall u r.  
+                             (Binary u, Binary r)
+                           => String
                            -> Either SocketWithDest ConnectedSocket
-                           -> TChan (Outgoing ObjectPose r)
-                           -> TChan (Outgoing ObjectPose ObjectOp)
-                           -> IO (TChan (Packet   ObjectPose r))
+                           -> TChan (Outgoing u r)
+                           -> TChan (Outgoing u r)
+                           -> IO (TChan (Packet   u r))
 createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets = do
   incomingRawPackets  <- newTChanIO
   
-  let conn = newConnection :: Connection ObjectPose ObjectOp
+  let conn = newConnection :: Connection u r
       sendReliablePacket    = either sendReliable sendReliableConn eitherSocket
       sendUnreliablePacket  = either sendBinary   sendBinaryConn   eitherSocket
 
@@ -65,12 +70,12 @@ createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets = d
         ([], []) -> retry
         (someOutgoing, someIncoming) -> return (someOutgoing, someIncoming)
 
-    forM_ (outgoing :: [Outgoing ObjectPose ObjectOp]) $ \case
+    forM_ (outgoing :: [Outgoing u r]) $ \case
       Reliable reliablePacket -> sendReliablePacket reliablePacket
       Unreliable unreliableBundle -> do
         bundleNum <- connNextBundleNum <<%= succ
         liftIO $ forM_ unreliableBundle $ \piece ->
-          sendUnreliablePacket (UnreliablePacket bundleNum piece :: Packet ObjectPose ObjectOp)
+          sendUnreliablePacket (UnreliablePacket bundleNum piece :: Packet u r)
 
     forM_ incoming $ \case
       UnreliablePacket bundleNum payload -> do
@@ -81,7 +86,7 @@ createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets = d
       ReliablePacket seqNum payload ->
         collectReliablePacket seqNum $ liftIO $ do
 
-          _ <- sendUnreliablePacket (ReliablePacketAck seqNum :: Packet ObjectPose ObjectOp)
+          _ <- sendUnreliablePacket (ReliablePacketAck seqNum :: Packet u r)
           liftIO . atomically . writeTChan verifiedPackets $ Reliable payload
       ReliablePacketAck seqNum ->
         receiveAck seqNum

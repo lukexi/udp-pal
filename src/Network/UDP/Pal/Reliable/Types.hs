@@ -42,18 +42,5 @@ newConnection :: (Binary u, Binary r) => Connection u r
 newConnection = Connection 0 0 0 mempty mempty
 
 
----
--- Move these back to main after getting Receiver working generically
 
-type ObjectID = Int
-
-data ObjectOp
-  = CreateObject ObjectID
-  | NameObject ObjectID String
-  deriving (Show, Generic)
-instance Binary ObjectOp
-data ObjectPose
-  = ObjectPose ObjectID
-  deriving (Show, Generic)
-instance Binary ObjectPose
 

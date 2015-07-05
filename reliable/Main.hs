@@ -16,7 +16,7 @@ import           Control.Concurrent.STM
 import           Control.Exception
 import qualified Data.Map               as Map
 import           Halive.Concurrent
-
+import Types
 
 
 serverPort :: PortNumber
