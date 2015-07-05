@@ -10,3 +10,4 @@ encode' = L.toStrict . encode
 -- | Decode a value from a strict bytestring
 decode' :: Binary c => ByteString -> c
 decode' = decode . L.fromStrict
+

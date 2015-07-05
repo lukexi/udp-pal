@@ -10,14 +10,13 @@
 
 import           Control.Monad.State
 import           Network.UDP.Pal
-import           Types
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Exception
 import qualified Data.Map               as Map
 import           Halive.Concurrent
-import           Receiver
+
 
 
 serverPort :: PortNumber

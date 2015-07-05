@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell            #-}
-module Types where
+module Network.UDP.Pal.Reliable.Types where
 import           Control.Lens
 import           Data.Binary
 import           Data.Map     (Map)
@@ -56,3 +56,4 @@ data ObjectPose
   = ObjectPose ObjectID
   deriving (Show, Generic)
 instance Binary ObjectPose
+

@@ -1,15 +1,16 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase   #-}
-module Receiver where
+module Network.UDP.Pal.Reliable.Receiver where
 import           Control.Concurrent.STM
-import           Network.UDP.Pal
-import           Types
+import           Network.UDP.Pal.Socket
+import Network.UDP.Pal.Types
+import           Network.UDP.Pal.Reliable.Types
 
 import           Control.Concurrent
 import           Control.Lens
 import           Control.Monad.State
 import           Halive.Concurrent
-import           ReliableUDP
+import           Network.UDP.Pal.Reliable.ReliableUDP
 
 streamInto :: TChan a -> IO a -> IO ()
 streamInto channel action =
@@ -31,10 +32,23 @@ createReceiver :: String
                    TChan (Outgoing ObjectPose r),
                    TChan (Outgoing ObjectPose ObjectOp))
 createReceiver name eitherSocket = do
-  incomingRawPackets  <- newTChanIO
   verifiedPackets     <- newTChanIO
   outgoingPackets     <- newTChanIO
+  incomingRawPackets  <- createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets
+  return
+    ( incomingRawPackets  -- Channel to pipe in raw packets from the socket;
+    , verifiedPackets     -- Channel to get out sequenced reliable packets and bundled unreliable packets
+    , outgoingPackets     -- Channel to write packets to send along
+    )
 
+createReceiverWithChannels :: String
+                           -> Either SocketWithDest ConnectedSocket
+                           -> TChan (Outgoing ObjectPose r)
+                           -> TChan (Outgoing ObjectPose ObjectOp)
+                           -> IO (TChan (Packet   ObjectPose r))
+createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets = do
+  incomingRawPackets  <- newTChanIO
+  
   let conn = newConnection :: Connection ObjectPose ObjectOp
       sendReliablePacket    = either sendReliable sendReliableConn eitherSocket
       sendUnreliablePacket  = either sendBinary   sendBinaryConn   eitherSocket
@@ -71,6 +85,4 @@ createReceiver name eitherSocket = do
         receiveAck seqNum
   return
     ( incomingRawPackets  -- Channel to pipe in raw packets from the socket;
-    , verifiedPackets     -- Channel to get out sequenced reliable packets and bundled unreliable packets
-    , outgoingPackets     -- Channel to write packets to send along
     )

@@ -20,7 +20,7 @@ boundSocket maybeHostName listenPort packetSize = do
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
   -- Bind it to the complete address
   bind sock (addrAddress addrInfo)
-
+  
   return (BoundSocket sock packetSize)
 
 -- We don't 'connect' as we want to receive from whatever address

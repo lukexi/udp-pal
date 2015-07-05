@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module ReliableUDP where
+module Network.UDP.Pal.Reliable.ReliableUDP where
 
 import Data.Binary
 import Control.Monad.State
@@ -10,8 +10,9 @@ import Control.Lens
 
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import Types
-import Network.UDP.Pal
+import           Network.UDP.Pal.Reliable.Types
+import Network.UDP.Pal.Socket
+import Network.UDP.Pal.Types
 -- import Control.Concurrent
 import Data.Monoid
 -- import Data.Maybe
