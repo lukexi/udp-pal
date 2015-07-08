@@ -66,18 +66,19 @@ launchServer = forkIO' $ do
 
   -- Launch the server's main thread to run physics simulations
   packetsFromClients <- atomically $ dupTChan broadcastChan
-  void . flip runStateT mempty . forever $ do
+  void . flip runStateT emptyAppState . forever $ do
     -- Process new packets
     packets <- liftIO . atomically $ exhaustChan packetsFromClients
     forM_ packets $ \case
-      Reliable   (CreateObject newCubeID pose) -> do
-        id . at newCubeID ?= pose
+      Reliable   (CreateObject newCubeID pose color) -> do
+        cubePoses  . at newCubeID ?= pose
+        cubeColors . at newCubeID ?= color
       Unreliable _poses -> do
         return ()
 
     -- Run physics
-    id . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
-    cubes <- use $ id . to Map.toList
+    cubePoses . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
+    cubes <- use $ cubePoses . to Map.toList
     let poses = map (\(cubeID, pose) -> ObjectPose cubeID pose) cubes
     --liftIO . putStrLn $ "Sending: " ++ show poses
     liftIO . atomically $ writeTChan broadcastChan (Unreliable poses)

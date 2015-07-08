@@ -120,19 +120,22 @@ main = do
 
   useProgram (program cube)
 
-  let newWorld = mempty
+  let newWorld = emptyAppState
+
+  ourColor <- liftIO $ V4 <$> randomRIO (0, 1) <*> randomRIO (0, 1) <*> randomRIO (0, 1) <*> pure 1
 
   void . flip runStateT newWorld . whileWindow window $ do
     -------------------------
     -- Process network events
     -------------------------
     liftIO (atomically (exhaustChan verifiedPackets)) >>= mapM_ (\case
-        Reliable (CreateObject objID pose) -> do
-          liftIO $ print (CreateObject objID pose)
-          id . at objID ?= pose
+        Reliable (CreateObject objID pose color) -> do
+          liftIO $ print (CreateObject objID pose color)
+          cubePoses . at objID ?= pose
+          cubeColors . at objID ?= color
         Unreliable unrel                   -> forM_ unrel $ \(ObjectPose objID pose) -> do
           --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
-          id . at objID ?= pose
+          cubePoses . at objID ?= pose
       )
 
     --------------------
@@ -144,8 +147,9 @@ main = do
         randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
         let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
         -- We should use our quasi-free monad thing here.
-        id . at newCubeID ?= pose
-        liftIO . atomically $ writeTChan outgoingPackets (Reliable (CreateObject newCubeID pose))
+        cubePoses . at newCubeID ?= pose
+        cubeColors . at newCubeID ?= ourColor
+        liftIO . atomically $ writeTChan outgoingPackets (Reliable (CreateObject newCubeID pose ourColor))
       _ -> return ()
 
     ---------
@@ -161,25 +165,26 @@ main = do
         projectionView = projection !*! view
     uniformV3 uCamLocation playerPos
 
-    newCubes <- use id
+    newCubes <- use cubePoses
     withVAO ( vAO cube ) $ 
-      forM_ ( zip [0..] ( Map.elems newCubes ) ) $ \( i , obj ) -> do
+      forM_ ( Map.toList newCubes ) $ \( objID , pose ) -> do
 
-        let model = mkTransformation (obj ^. posOrientation) (obj ^. posPosition)
+        let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
+        color <- fromMaybe (V4 0 1 0 1) <$> use (cubeColors . at objID)
 
-        drawEntity model projectionView i cube
+        drawEntity cube model projectionView color
 
     swapBuffers window
 
-drawEntity :: MonadIO m => M44 GLfloat -> M44 GLfloat -> GLfloat -> Entity Uniforms -> m ()
-drawEntity model projectionView drawID anEntity = do 
+drawEntity :: MonadIO m => Entity Uniforms -> M44 GLfloat -> M44 GLfloat -> Color -> m ()
+drawEntity anEntity model projectionView color = do 
 
   let Uniforms{..} = uniforms anEntity
 
   uniformM44 uViewProjection projectionView
   uniformM44 uInverseModel (fromMaybe model (inv44 model))
   uniformM44 uModel model
-  uniformV4 uDiffuse (V4 0 1 0 1)
+  uniformV4 uDiffuse color
 
   let vc = vertCount ( geometry anEntity ) 
   glDrawElements GL_TRIANGLES ( vc ) GL_UNSIGNED_INT nullPtr
