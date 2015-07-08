@@ -132,7 +132,7 @@ main = do
           --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
           id . at objID ?= pose
       )
-    
+
     --------------------
     -- Process UI events
     --------------------
@@ -149,16 +149,15 @@ main = do
     ---------
     -- Render
     ---------
+    let Uniforms{..} = uniforms cube
     glClear (GL_COLOR_BUFFER_BIT .|. GL_DEPTH_BUFFER_BIT)
   
     projection  <- makeProjection window
     let playerPos = V3 0 0 5
         playerOrient = axisAngle (V3 0 1 0) 0
         view = viewMatrix playerPos playerOrient
-        cam = uCamera ( uniforms cube )
         projectionView = projection !*! view
-        eyePos = fromMaybe view (inv44 view) ^. translation
-    uniformV3 cam eyePos
+    uniformV3 uCamLocation playerPos
 
     newCubes <- use id
     withVAO ( vAO cube ) $ 
@@ -175,11 +174,10 @@ drawEntity model projectionView drawID anEntity = do
 
   let Uniforms{..} = uniforms anEntity
 
-  uniformM44 uModelViewProjection ( projectionView !*! model)
+  uniformM44 uViewProjection projectionView
   uniformM44 uInverseModel (fromMaybe model (inv44 model))
   uniformM44 uModel model
-
-  uniformF uID drawID
+  uniformV4 uDiffuse (V4 0 1 0 1)
 
   let vc = vertCount ( geometry anEntity ) 
   glDrawElements GL_TRIANGLES ( vc ) GL_UNSIGNED_INT nullPtr
@@ -197,13 +195,9 @@ makeProjection win = do
 
 
 data Uniforms = Uniforms
-  { uModelViewProjection  :: UniformLocation (M44 GLfloat)
-  , uInverseModel         :: UniformLocation (M44 GLfloat)
-  , uModel                :: UniformLocation (M44 GLfloat)
-  , uCamera               :: UniformLocation (V3 GLfloat)
-  , uLight1               :: UniformLocation (V3 GLfloat)
-  , uLight2               :: UniformLocation (V3 GLfloat)
-  , uLight3               :: UniformLocation (V3 GLfloat)
-  , uLight4               :: UniformLocation (V3 GLfloat)
-  , uID                   :: UniformLocation (GLfloat)
+  { uViewProjection :: UniformLocation (M44 GLfloat)
+  , uInverseModel   :: UniformLocation (M44 GLfloat)
+  , uModel          :: UniformLocation (M44 GLfloat)
+  , uCamLocation    :: UniformLocation (V3 GLfloat)
+  , uDiffuse        :: UniformLocation (V4 GLfloat)
   } deriving (Data, Typeable)
