@@ -8,6 +8,7 @@ import           Linear
 import Data.Binary
 import Control.Lens
 import Data.Map (Map)
+import           Network.UDP.Pal
 
 data Pose = Pose
   { _posPosition    :: V3 GLfloat
@@ -21,7 +22,7 @@ type ObjectID = Int
 
 data ObjectOp
   = CreateObject ObjectID Pose Color
-  | NameObject ObjectID String
+  | ConnectClient String
   deriving (Show, Generic)
 instance Binary ObjectOp
 data ObjectPose
@@ -38,3 +39,12 @@ makeLenses ''AppState
 
 emptyAppState :: AppState
 emptyAppState = AppState mempty mempty
+
+serverPort :: PortNumber
+serverPort = 3000
+
+serverName :: String
+serverName = "127.0.0.1"
+
+packetSize :: Int
+packetSize = 4096

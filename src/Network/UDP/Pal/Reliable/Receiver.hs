@@ -13,6 +13,7 @@ import           Control.Lens
 import           Control.Monad.State
 import           Halive.Concurrent
 import           Network.UDP.Pal.Reliable.ReliableUDP
+import           Network.Socket             as Exports (HostName, PortNumber, getSocketName)
 import Data.Binary
 
 streamInto :: TChan a -> IO a -> IO ()
@@ -27,6 +28,26 @@ exhaustChan chan = go mempty
     go !accum = tryReadTChan chan >>= \case
       Just msg -> go (accum ++ [msg])
       Nothing -> return accum
+
+createReceiverToAddress :: forall u r. 
+                           (Binary u, Binary r)  
+                        => HostName
+                        -> PortNumber
+                        -> Int
+                        -> IO
+                            (TChan (Outgoing u r),
+                             TChan (Outgoing u r))
+createReceiverToAddress serverName serverPort packetSize = do
+  toServerSock <- socketWithDest serverName serverPort packetSize
+  (incomingRawPackets, verifiedPackets, outgoingPackets) <- createReceiver "Client" (Left toServerSock)
+  -- Stream received packets into the Receiver's packetsIn channel
+  streamInto incomingRawPackets (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (Packet u r))
+
+
+  displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
+  putStrLn $ "*** Launched client: " ++ displayName
+
+  return (verifiedPackets, outgoingPackets)
 
 createReceiver :: forall u r. 
                   (Binary u, Binary r) 
@@ -53,7 +74,7 @@ createReceiverWithChannels :: forall u r.
                            -> TChan (Outgoing u r)
                            -> TChan (Outgoing u r)
                            -> IO (TChan (Packet   u r))
-createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets = do
+createReceiverWithChannels _name eitherSocket verifiedPackets outgoingPackets = do
   incomingRawPackets  <- newTChanIO
   
   let conn = newConnection :: Connection u r
@@ -61,7 +82,7 @@ createReceiverWithChannels name eitherSocket verifiedPackets outgoingPackets = d
       sendUnreliablePacket  = either sendBinary   sendBinaryConn   eitherSocket
 
   _threadID <- forkIO' . void . flip runStateT conn . forever $ do
-    liftIO $ putStrLn $ name ++ " awaiting packet"
+    --liftIO $ putStrLn $ name ++ " awaiting packet"
 
     (outgoing, incoming) <- liftIO . atomically $ do
       outgoing <- exhaustChan outgoingPackets

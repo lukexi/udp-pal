@@ -1,7 +1,5 @@
 {-# LANGUAGE LambdaCase                #-}
 
-module MainGLServer where
-
 import           Linear
 import Control.Concurrent.STM
 import qualified Data.Map               as Map
@@ -16,17 +14,13 @@ import Control.Lens
 
 import Types
 
-serverPort :: PortNumber
-serverPort = 3000
 
-serverName :: String
-serverName = "127.0.0.1"
 
-packetSize :: Int
-packetSize = 4096
+main :: IO ()
+main = void launchServer
 
-launchServer :: IO ThreadId
-launchServer = forkIO' $ do
+launchServer :: IO ()
+launchServer = do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   let finallyClose = flip finally (close (bsSocket incomingSocket))
 
@@ -73,6 +67,7 @@ launchServer = forkIO' $ do
       Reliable   (CreateObject newCubeID pose color) -> do
         cubePoses  . at newCubeID ?= pose
         cubeColors . at newCubeID ?= color
+      Reliable _ -> return ()
       Unreliable _poses -> do
         return ()
 

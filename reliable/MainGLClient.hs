@@ -24,16 +24,14 @@ import Data.Maybe
 import System.Random
 import Data.Data
 
-
 import Types
-import MainGLServer
 
 {-
 NEXT UP:
 [x] Add cube coloring
-[ ] Support multiple clients
-[ ] Choose random color for each client, add to cube message
-[ ] Make sure cubes make it across correctly
+[x] Support multiple clients
+[x] Choose random color for each client, add to cube message
+[x] Make sure cubes make it across correctly
 -}
 
 {-
@@ -82,27 +80,17 @@ Client is running
 resX, resY :: Int
 resX=1024; resY=768
 
-createReceiverToAddress serverName serverPort packetSize = do
-  toServerSock <- socketWithDest serverName serverPort packetSize
-  (incomingRawPackets, verifiedPackets, outgoingPackets) <- createReceiver "Client" (Left toServerSock)
-  -- Stream received packets into the Receiver's packetsIn channel
-  streamInto incomingRawPackets (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (Packet ObjectPose ObjectOp))
 
-
-  displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
-  putStrLn $ "*** Launched client: " ++ displayName
-
-  return (verifiedPackets, outgoingPackets)
 
 main :: IO ()
 main = do
   killThreads
-  _ <- launchServer
 
   -------------------
   -- Networking setup
   -------------------
   (verifiedPackets, outgoingPackets) <- createReceiverToAddress serverName serverPort packetSize
+  liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "Sup"))
 
   ------------------
   -- GL/Window setup
@@ -133,6 +121,7 @@ main = do
           liftIO $ print (CreateObject objID pose color)
           cubePoses . at objID ?= pose
           cubeColors . at objID ?= color
+        Reliable (ConnectClient name) -> liftIO $ putStrLn $ "Hello, " ++ name
         Unreliable unrel                   -> forM_ unrel $ \(ObjectPose objID pose) -> do
           --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
           cubePoses . at objID ?= pose

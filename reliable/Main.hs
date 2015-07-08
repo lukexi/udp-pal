@@ -18,16 +18,6 @@ import qualified Data.Map               as Map
 import           Halive.Concurrent
 import Types
 
-
-serverPort :: PortNumber
-serverPort = 3000
-
-serverName :: String
-serverName = "127.0.0.1"
-
-packetSize :: Int
-packetSize = 4096
-
 launchServer :: IO ThreadId
 launchServer = forkIO' $ do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
@@ -79,13 +69,13 @@ main = do
 
   forever $ do
 
-    liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 0 "hello"))
+    liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "hello"))
     liftIO $ print =<< atomically (exhaustChan verifiedPackets)
 
-    liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 1 "sailor"))
+    liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "sailor"))
     liftIO $ print =<< atomically (exhaustChan verifiedPackets)
 
-    liftIO . atomically $ writeTChan outgoingPackets (Reliable (NameObject 2 "!!!"))
+    liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "!!!"))
     liftIO $ print =<< atomically (exhaustChan verifiedPackets)
 
     liftIO $ threadDelay 1000000
