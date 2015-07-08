@@ -1,7 +1,6 @@
 #version 330 core
 
 uniform vec3 uCamLocation;
-
 uniform vec4 uDiffuse;
 uniform int  uUseAlphaTexture;
 
@@ -9,7 +8,7 @@ uniform sampler2D uTexture;
 
 in      vec3 vPosition;
 in      vec3 vNormal;
-in      vec2 vTexCoord;
+in      vec2 vUV;
 
 out     vec4 fragColor;
 
@@ -39,7 +38,7 @@ void main() {
     
     float mask = 1;
     if (uUseAlphaTexture != 0) {
-        mask = texture(uTexture, vTexCoord).r;
+        mask = texture(uTexture, vUV).r;
     }
 
     fragColor = vec4(diffuseLit, uDiffuse.a * mask);

@@ -2,7 +2,7 @@
 
 uniform mat4 uViewProjection;
 uniform mat4 uModel;
-uniform mat3 uInverseModel;
+uniform mat4 uInverseModel;
 
 // Used by font rendering
 uniform float uXOffset;
@@ -14,7 +14,7 @@ in      vec2 aUV;
 
 out     vec3 vPosition;
 out     vec3 vNormal;
-out     vec2 vTexCoord;
+out     vec2 vUV;
 
 void main() {
     // Apply all matrix transformations to vert
@@ -23,6 +23,6 @@ void main() {
     
     // Pass some variables to the fragment shader
     vPosition = vec3(finalPosition);
-    vNormal   = uInverseModel * aNormal;
-    vTexCoord = aTexCoord;
+    vNormal   = (uInverseModel * vec4(aNormal, 1.)).xyz;
+    vUV       = aUV;
 }

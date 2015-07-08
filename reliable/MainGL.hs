@@ -30,8 +30,10 @@ import MainGLServer
 
 {-
 NEXT UP:
-Add cube coloring
-
+[x] Add cube coloring
+[ ] Support multiple clients
+[ ] Choose random color for each client, add to cube message
+[ ] Make sure cubes make it across correctly
 -}
 
 {-
@@ -107,7 +109,7 @@ main = do
   ------------------
   (window, events) <- createWindow "ReliableCubes" resX resY
 
-  cubeProg   <- createShaderProgram "reliable/cube.vert" "reliable/cube.frag"
+  cubeProg   <- createShaderProgram "reliable/poly.vert" "reliable/poly.frag"
   cubeGeo    <- cubeGeometry ( 0.5 :: V3 GLfloat ) ( V3 1 1 1 )
   cube       <- entity cubeGeo cubeProg 
 
