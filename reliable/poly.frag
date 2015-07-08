@@ -30,11 +30,11 @@ void main() {
     vec3 surfaceToLight = normalize(lightPosition - surfacePos);
 
     // Calculate final color of the pixel, based on:
+    
     // 1. The angle of incidence: diffuseCoefficient
+    float diffuseCoefficient = max(ambient, dot(normal, surfaceToLight));
     // 2. The color/intensities of the light: lightColor
     // 3. The diffuse color: surfaceColor
-
-    float diffuseCoefficient = max(ambient, dot(normal, surfaceToLight));
     vec3 diffuseLit = diffuseCoefficient * surfaceColor.rgb * lightColor;
     
     float mask = 1;
