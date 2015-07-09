@@ -12,5 +12,6 @@ data SocketWithDest = SocketWithDest
   , swdDestination :: AddrInfo
   } deriving Show
 
-
-newtype ConnectedSocket = ConnectedSocket { unConnectedSocket :: Socket }
+newtype ConnectedSocket = ConnectedSocket 
+  { unConnectedSocket :: Socket 
+  } deriving Show

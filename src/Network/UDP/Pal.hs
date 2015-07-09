@@ -8,7 +8,7 @@ import           Network.UDP.Pal.Types      as Exports
 
 import           Network.UDP.Pal.Reliable.Types      as Exports
 import           Network.UDP.Pal.Reliable.ReliableUDP      as Exports
-import           Network.UDP.Pal.Reliable.Receiver      as Exports
+import           Network.UDP.Pal.Reliable.Transceiver      as Exports
 
 import           Network.Socket             as Exports (HostName, PortNumber,
                                                         close, getSocketName)

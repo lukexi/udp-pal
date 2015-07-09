@@ -33,7 +33,7 @@ launchServer = forkIO' $ do
               return (Map.insert fromAddr client currentClients, client)
       newServerToClientThread fromAddr = do
         toClientSock <- connectedSocketToAddr fromAddr
-        createReceiver "Server" (Right toClientSock)
+        createTransceiver "Server" (Right toClientSock)
 
 
 
@@ -41,16 +41,16 @@ launchServer = forkIO' $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
 
-    (incomingRawPackets, verifiedPackets, _outgoingPackets) <- findClient fromAddr
+    transceiver <- findClient fromAddr
 
-    let packet = decode' newMessage :: Packet ObjectPose ObjectOp
-    atomically $ writeTChan incomingRawPackets packet
+    let packet = decode' newMessage :: WirePacket ObjectPose ObjectOp
+    atomically $ writeTChan (tcIncomingRawPackets transceiver) packet
 
     liftIO . putStrLn $ "Received from: " ++ show fromAddr
                         ++ ": " ++ show packet
 
 
-    print =<< atomically (exhaustChan verifiedPackets)
+    print =<< atomically (exhaustChan (tcVerifiedPackets transceiver))
     -- atomically $ writeTChan outgoingPackets (Reliable (NameObject 42 "Oh hey!"))
 
 main :: IO ()
@@ -62,20 +62,21 @@ main = do
   displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
   putStrLn $ "*** Launched client: " ++ displayName
 
-  (incomingRawPackets, verifiedPackets, outgoingPackets) <- createReceiver "Client" (Left toServerSock)
+  transceiver <- createTransceiver "Client" (Left toServerSock)
 
-  -- Stream received packets into the Receiver's packetsIn channel
-  streamInto incomingRawPackets (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (Packet ObjectPose ObjectOp))
+  -- Stream received packets into the Transceiver's packetsIn channel
+  streamInto (tcIncomingRawPackets transceiver) 
+    (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket ObjectPose ObjectOp))
 
   forever $ do
 
-    liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "hello"))
-    liftIO $ print =<< atomically (exhaustChan verifiedPackets)
+    liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (ConnectClient "hello"))
+    liftIO $ print =<< atomically (exhaustChan (tcVerifiedPackets transceiver))
 
-    liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "sailor"))
-    liftIO $ print =<< atomically (exhaustChan verifiedPackets)
+    liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (ConnectClient "sailor"))
+    liftIO $ print =<< atomically (exhaustChan (tcVerifiedPackets transceiver))
 
-    liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "!!!"))
-    liftIO $ print =<< atomically (exhaustChan verifiedPackets)
+    liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (ConnectClient "!!!"))
+    liftIO $ print =<< atomically (exhaustChan (tcVerifiedPackets transceiver))
 
     liftIO $ threadDelay 1000000

@@ -21,7 +21,7 @@ import Data.Monoid
 -----------
 -- Reliable
 -----------
-queueReliable :: (MonadIO m, MonadState (Connection u r) m, Binary r) => r -> m (Map SeqNum r)
+queueReliable :: (MonadIO m, MonadState (TransceiverState u r) m, Binary r) => r -> m (Map SeqNum r)
 queueReliable payload = do
   seqNum <- connNextSeqNumTo <<%= succ
   connUnacked . at seqNum ?= payload
@@ -29,31 +29,31 @@ queueReliable payload = do
 
 -- | Discard all packets less than the acknowledged sequence number
 -- Server should send acks with every message to the client to ensure redundancy.
-receiveAck :: MonadState (Connection u r) m => SeqNum -> m ()
+receiveAck :: MonadState (TransceiverState u r) m => SeqNum -> m ()
 receiveAck seqNum = do
   unacked <- use connUnacked
   let (_smaller, larger) = Map.split seqNum unacked
   connUnacked .= larger
 
 
-sendReliable :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (Connection a b) m)
+sendReliable :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (TransceiverState a b) m)
              => SocketWithDest -> b -> m ()
 sendReliable sock message = do
   reliablePackets <- queueReliable message
   forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
-    sendBinary sock (ReliablePacket seqNum payload :: Packet a b)
+    sendBinary sock (ReliablePacket seqNum payload :: WirePacket a b)
 
-sendReliableConn :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (Connection a b) m)
+sendReliableConn :: forall a b m. (Binary a, Binary b, MonadIO m, MonadState (TransceiverState a b) m)
                  => ConnectedSocket -> b -> m ()
 sendReliableConn sock message = do
   reliablePackets <- queueReliable message
   forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
-    sendBinaryConn sock (ReliablePacket seqNum payload :: Packet a b)
+    sendBinaryConn sock (ReliablePacket seqNum payload :: WirePacket a b)
 
 -- | Given the seqNum of a newly-received reliable packet,
 -- checkes if the seqNum is the successor of the last one we received.
 -- If so, records the new seqNum and calls the given action; otherwise, does nothing.
-collectReliablePacket :: MonadState (Connection u r) m
+collectReliablePacket :: MonadState (TransceiverState u r) m
                       => SeqNum -> m () -> m ()
 collectReliablePacket seqNum action = do
   nextSeqNumFrom <- use connNextSeqNumFrom
@@ -64,42 +64,21 @@ collectReliablePacket seqNum action = do
 -------------
 -- Unreliable
 -------------
-collectUnreliablePacket :: MonadState (Connection u r) m
+collectUnreliablePacket :: MonadState (TransceiverState u r) m
                         => BundleNum
                         -> u
                         -> m (Maybe [u])
 collectUnreliablePacket bundleNum payload = do
-  newBundles <- connBundles <%= Map.insertWith (<>) bundleNum [payload]
-  if Map.size newBundles < 5
+  -- Ignore bundle pieces that are older than our oldest buffered bundle
+  bundles <- use connBundles
+  let isOlder = bundles ^? to Map.minViewWithKey . traverse . _1 . _1 . to (bundleNum <)
+  if (isOlder == Just True) 
     then return Nothing
     else do
-      let ((_oldestBundleNum, oldestBundle), bundlesMinusOldest) = Map.deleteFindMin newBundles
-      connBundles .= bundlesMinusOldest
-      return (Just oldestBundle)
-
--- newtype UnreliableCollector a = UnreliableCollector
---   { urcCollection :: MVar (Map BundleNum [a])
---   }
-
--- makeCollector :: MonadIO m => m (UnreliableCollector a)
--- makeCollector = liftIO $ UnreliableCollector <$> newMVar Map.empty
-
--- | Merges each received packet into a collection MVar
-
--- collectUnreliablePacket :: MonadIO m => UnreliableCollector a -> BundleNum -> a -> m ()
--- collectUnreliablePacket collector bundleNum payload = liftIO $
---   modifyMVar_ (urcCollection collector) $
---     return . Map.insertWith (<>) bundleNum [payload]
-
-
--- | Called by the app when it's ready for the packets in a given bundle number
--- As we're unreliable, some or all of these may be missing, so the app must be
--- designed around that.
--- Returns a list of all packets received with the given bundle number,
--- and discards any older messages than that
-
--- extractBundle :: MonadIO m => UnreliableCollector a -> BundleNum -> m [a]
--- extractBundle collector bundleNum = liftIO $
---   modifyMVar (urcCollection collector) $ \c -> do
---     let (_lower, result, higher) = Map.splitLookup bundleNum c
---     return (higher, fromMaybe [] result)
+      newBundles <- connBundles <%= Map.insertWith (<>) bundleNum [payload]
+      if Map.size newBundles < 5
+        then return Nothing
+        else do
+          let ((_oldestBundleNum, oldestBundle), bundlesMinusOldest) = Map.deleteFindMin newBundles
+          connBundles .= bundlesMinusOldest
+          return (Just oldestBundle)

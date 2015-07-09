@@ -32,6 +32,10 @@ NEXT UP:
 [x] Support multiple clients
 [x] Choose random color for each client, add to cube message
 [x] Make sure cubes make it across correctly
+[ ] Add keepalive and "quit commands" (i.e. delete this object)
+    Transmit these at the start? Or make these configurable.
+[ ] Add avatars that travel in a circle at different speeds
+
 -}
 
 {-
@@ -89,8 +93,8 @@ main = do
   -------------------
   -- Networking setup
   -------------------
-  (verifiedPackets, outgoingPackets) <- createReceiverToAddress serverName serverPort packetSize
-  liftIO . atomically $ writeTChan outgoingPackets (Reliable (ConnectClient "Sup"))
+  transceiver <- createTransceiverToAddress serverName serverPort packetSize
+  liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (ConnectClient "Sup"))
 
   ------------------
   -- GL/Window setup
@@ -116,7 +120,7 @@ main = do
     -------------------------
     -- Process network events
     -------------------------
-    liftIO (atomically (exhaustChan verifiedPackets)) >>= mapM_ (\case
+    liftIO (atomically (exhaustChan (tcVerifiedPackets transceiver))) >>= mapM_ (\case
         Reliable (CreateObject objID pose color) -> do
           liftIO $ print (CreateObject objID pose color)
           cubePoses . at objID ?= pose
@@ -138,7 +142,7 @@ main = do
         -- We should use our quasi-free monad thing here.
         cubePoses . at newCubeID ?= pose
         cubeColors . at newCubeID ?= ourColor
-        liftIO . atomically $ writeTChan outgoingPackets (Reliable (CreateObject newCubeID pose ourColor))
+        liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (CreateObject newCubeID pose ourColor))
       _ -> return ()
 
     ---------

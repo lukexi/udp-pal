@@ -3,7 +3,7 @@ TODAY:
 [x] Use a small sliding window for unreliable messages,
     e.g. [0,1,2,3,4] are all being assembled, and when we see 5, kick out 0 to always keep 5 values in the buffer.
     Maybe when we kick it out, we should place it in the verifiedPackets queue, rather than exposing the collector?
-    Then we can keep all receiver state in the Connection type.
+    Then we can keep all receiver state in the TransceiverState type.
     (and we don't need the collector in an MVar)
 
 [x] If we use a list for unreliable packets we can send them into the receiver's outgoing channel

@@ -6,6 +6,7 @@ import GHC.Generics (Generic)
 import           Graphics.GL
 import           Linear
 import Data.Binary
+
 import Control.Lens
 import Data.Map (Map)
 import           Network.UDP.Pal
@@ -23,6 +24,7 @@ type ObjectID = Int
 data ObjectOp
   = CreateObject ObjectID Pose Color
   | ConnectClient String
+  | DisconnectClient String
   deriving (Show, Generic)
 instance Binary ObjectOp
 data ObjectPose
