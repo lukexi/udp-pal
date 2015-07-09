@@ -11,13 +11,13 @@ TODAY:
 
 [x] Have outgoingPackets use Reliable | Unreliable sum type
 
-[ ] We should have a way to bypass the collector on the server side and just broadcast
+[ ] We should possibly have a way to bypass the collector on the server side and just broadcast
     certain unreliable messages straight out - specifically pose data from players - to avoid
     adding any latency to them.
     (consider how this will interact with physics updates, though;
     it may make things look unsynchronized which might be worse than latency)
 
-[ ] Add keepalive checks for kicking out clients while we're here.
+[x] Add keepalive checks for kicking out clients while we're here.
 
 
 

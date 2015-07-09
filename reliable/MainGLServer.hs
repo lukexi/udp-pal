@@ -16,24 +16,34 @@ import Types
 
 main :: IO ()
 main = do
+  putStrLn "GL Server running."
 
-  broadcastChan <- createServer serverName serverPort packetSize
+  (broadcastChan, disconnectionsChan) <- createServer serverName serverPort packetSize
   ourAddr <- addrAddress <$> addressInfo (Just serverName) (Just (show serverPort))
   packetsFromClients <- atomically $ dupTChan broadcastChan
-  let getPacketsFromClients = map snd . filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
+  let getPacketsFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
       broadcastToClients    = liftIO . atomically . writeTChan broadcastChan . (ourAddr,)
 
   -- Launch the server's main thread to run physics simulations
   
   void . flip runStateT emptyAppState . forever $ do
+    
+    disconnections <- liftIO (atomically (exhaustChan disconnectionsChan))
+    forM_ disconnections $ \fromAddr -> do
+      liftIO $ putStrLn $ "GOODBYE: " ++ show fromAddr
+      -- TODO should look up the association we get from ConnectClient below rather than using fromAddr directly
+      broadcastToClients (Reliable (DisconnectClient (show fromAddr)))
+
     -- Process new packets
     packets <- getPacketsFromClients
-    forM_ packets $ \case
+    forM_ packets $ \(fromAddr, message) -> case message of
       Reliable   (CreateObject newCubeID pose color) -> do
         cubePoses  . at newCubeID ?= pose
         cubeColors . at newCubeID ?= color
-      Reliable _ -> return ()
-      Unreliable _poses -> do
+      Reliable   (ConnectClient clientID) -> do
+        liftIO . putStrLn $ "Should associate " ++ show fromAddr ++ " with userID " ++ clientID
+      Reliable   _ -> return ()
+      Unreliable _clientPose -> do
         return ()
 
     -- Run physics

@@ -39,12 +39,17 @@ client is dead, which the app threads can pickup and use to clean up the client.
 -- and broadcasts them to all listening clients. Returns a channel that
 -- can broadcast to all listening clients.
 
-createServer :: forall u r. (Binary u, Binary r) => HostName -> PortNumber -> PacketSize -> IO (TChan (SockAddr, AppPacket u r))
+createServer :: forall u r. (Binary u, Binary r) 
+             => HostName 
+             -> PortNumber 
+             -> PacketSize 
+             -> IO (TChan (SockAddr, AppPacket u r), TChan SockAddr)
 createServer serverName serverPort packetSize = do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   let finallyClose = flip finally (close (bsSocket incomingSocket))
 
   broadcastChan <- newBroadcastTChanIO
+  disconnectionsChan <- newTChanIO
 
   clients <- newMVar mempty
   let findClient fromAddr =
@@ -73,6 +78,7 @@ createServer serverName serverPort packetSize = do
           mapM_ killThread [incomingThread, outgoingThread]
           close (unConnectedSocket toClientSock)
           modifyMVar_ clients (return . Map.delete fromAddr)
+          atomically $ writeTChan disconnectionsChan fromAddr
         
         return transceiver
 
@@ -88,4 +94,4 @@ createServer serverName serverPort packetSize = do
     let packet = decode' newMessage :: WirePacket u r
     atomically $ writeTChan (tcIncomingRawPackets transceiver) packet
 
-  return broadcastChan
+  return (broadcastChan, disconnectionsChan)

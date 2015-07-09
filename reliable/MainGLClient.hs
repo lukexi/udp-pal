@@ -27,12 +27,14 @@ import Data.Data
 import Types
 
 {-
+
 NEXT UP:
 [x] Add cube coloring
 [x] Support multiple clients
 [x] Choose random color for each client, add to cube message
 [x] Make sure cubes make it across correctly
-[ ] Add keepalive and "quit commands" (i.e. delete this object)
+[x] Add keepalive 
+[x] Add "quit commands" (i.e. delete this object)
     Transmit these at the start? Or make these configurable.
 [ ] Add avatars that travel in a circle at different speeds
 
@@ -109,8 +111,9 @@ main = do
           liftIO $ print (CreateObject objID pose color)
           cubePoses . at objID ?= pose
           cubeColors . at objID ?= color
-        Reliable (ConnectClient name) -> liftIO $ putStrLn $ "Hello, " ++ name
-        Unreliable unrel                   -> forM_ unrel $ \(ObjectPose objID pose) -> do
+        Reliable (ConnectClient name)    -> liftIO $ putStrLn $ "Hello, " ++ name
+        Reliable (DisconnectClient name) -> liftIO $ putStrLn $ "Goodbye, " ++ name
+        Unreliable unrel                 -> forM_ unrel $ \(ObjectPose objID pose) -> do
           --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
           cubePoses . at objID ?= pose
       )
