@@ -1,5 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
-module Network.UDP.Pal.Socket where
+module Network.UDP.Pal.Socket 
+  ( module Network.UDP.Pal.Socket
+  , close -- From Network.Socket
+  ) where
 
 import           Control.Concurrent
 import           Control.Monad.Trans
@@ -13,7 +16,7 @@ import           Network.UDP.Pal.Types
 -- | Create a socket bound to our IP and the given port
 -- that can send to and receive from anywhere.
 -- I believe passing Just an IP will allow public IP binding, need to verify
-boundSocket :: Maybe HostName -> PortNumber -> Int -> IO BoundSocket
+boundSocket :: Maybe HostName -> PortNumber -> PacketSize -> IO BoundSocket
 boundSocket maybeHostName listenPort packetSize = do
   -- Create a socket
   addrInfo <- addressInfo maybeHostName (Just (show listenPort))
@@ -29,7 +32,7 @@ boundSocket maybeHostName listenPort packetSize = do
 -- from address to send us messages.
 -- Nothing uses any IP, and 0 gets a random port to receive from
 
-socketWithDest :: HostName -> PortNumber -> Int -> IO SocketWithDest
+socketWithDest :: HostName -> PortNumber -> PacketSize -> IO SocketWithDest
 socketWithDest destName destPort packetSize = do
   boundSock      <- boundSocket Nothing (0::PortNumber) packetSize
   -- Get the address for the server's receive port

@@ -54,28 +54,12 @@ Try making the above configurable for the server setup we've got
 -}
 
 {-
+
 Client sends hand and head updates unreliably to the server.
 Server receives all these and broadcasts every frame to the all clients.
 Client sends reliable "create cube" updates to the server.
 Server re-broadcasts these to clients, and also starts physics sim
 to send unreliable updates and expiration timer to send reliable "DeleteCube" message.
-
-Server is running
-  message accept loop
-  send-threads for each client
-  physics sim loop
-    receives from clients
-    simulate
-    broadcasts to clients
-
-Client is running
-  message accept loop
-  render loop
-    receive messages
-    receive input
-    simulate
-    render
-    send updates to server
 
 -}
 

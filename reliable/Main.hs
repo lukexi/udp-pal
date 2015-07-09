@@ -65,7 +65,7 @@ main = do
   transceiver <- createTransceiver "Client" (Left toServerSock)
 
   -- Stream received packets into the Transceiver's packetsIn channel
-  streamInto (tcIncomingRawPackets transceiver) 
+  _receiveThread <- streamInto (tcIncomingRawPackets transceiver) 
     (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket ObjectPose ObjectOp))
 
   forever $ do

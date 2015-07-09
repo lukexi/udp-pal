@@ -24,6 +24,7 @@ library
     Network.UDP.Pal.EchoServer,
     Network.UDP.Pal.Reliable.Transceiver,
     Network.UDP.Pal.Reliable.ReliableUDP,
+    Network.UDP.Pal.Reliable.Server,
     Network.UDP.Pal.Reliable.Types
   ghc-options:         -Wall -O2
 

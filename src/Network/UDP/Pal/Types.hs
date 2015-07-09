@@ -1,4 +1,9 @@
-module Network.UDP.Pal.Types where
+module Network.UDP.Pal.Types 
+  ( HostName
+  , PortNumber
+  , SockAddr(..)
+  , module Network.UDP.Pal.Types
+  ) where
 
 import           Network.Socket hiding (recv, recvFrom, send, sendTo)
 
@@ -15,3 +20,5 @@ data SocketWithDest = SocketWithDest
 newtype ConnectedSocket = ConnectedSocket 
   { unConnectedSocket :: Socket 
   } deriving Show
+
+type PacketSize = Int
