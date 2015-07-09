@@ -72,6 +72,12 @@ resX=1024; resY=768
 
 
 
+randomName :: IO String
+randomName = concat <$> replicateM 3 randomPair
+  where
+    randomPair = (\(x,y) -> [x,y]) . (pairs !!) <$> randomRIO (0, length pairs - 1)
+    pairs = zip "bcdfghjklmnpqrstvwxz" (cycle "aeiouy")
+
 main :: IO ()
 main = do
   killThreads
@@ -79,8 +85,16 @@ main = do
   -------------------
   -- Networking setup
   -------------------
-  transceiver <- createTransceiverToAddress serverName serverPort packetSize
-  liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (ConnectClient "Sup"))
+  ourName <- randomName
+  ourPose  <- liftIO $ Pose
+    <$> (V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5))
+    <*> pure (axisAngle (V3 0 1 0) 0)
+    
+  ourColor <- liftIO $ V4 <$> randomRIO (0, 1) <*> randomRIO (0, 1) <*> randomRIO (0, 1) <*> pure 1
+  let ourConnectMessage = ConnectClient ourName ourPose ourColor
+
+  _transceiver@Transceiver{..} <- createTransceiverToAddress serverName serverPort packetSize
+  liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable ourConnectMessage
 
   ------------------
   -- GL/Window setup
@@ -98,24 +112,15 @@ main = do
 
   useProgram (program cube)
 
-  let newWorld = emptyAppState
-
-  ourColor <- liftIO $ V4 <$> randomRIO (0, 1) <*> randomRIO (0, 1) <*> randomRIO (0, 1) <*> pure 1
+  newWorld <- execStateT (interpretReliable ourConnectMessage) emptyAppState
 
   void . flip runStateT newWorld . whileWindow window $ do
     -------------------------
     -- Process network events
     -------------------------
-    liftIO (atomically (exhaustChan (tcVerifiedPackets transceiver))) >>= mapM_ (\case
-        Reliable (CreateObject objID pose color) -> do
-          liftIO $ print (CreateObject objID pose color)
-          cubePoses . at objID ?= pose
-          cubeColors . at objID ?= color
-        Reliable (ConnectClient name)    -> liftIO $ putStrLn $ "Hello, " ++ name
-        Reliable (DisconnectClient name) -> liftIO $ putStrLn $ "Goodbye, " ++ name
-        Unreliable unrel                 -> forM_ unrel $ \(ObjectPose objID pose) -> do
-          --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
-          cubePoses . at objID ?= pose
+    liftIO (atomically (exhaustChan tcVerifiedPackets)) >>= mapM_ (\case
+        Reliable message -> interpretReliable message
+        Unreliable unrel -> forM_ unrel interpretUnreliable
       )
 
     --------------------
@@ -126,10 +131,9 @@ main = do
         newCubeID <- liftIO randomIO
         randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
         let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
-        -- We should use our quasi-free monad thing here.
-        cubePoses . at newCubeID ?= pose
-        cubeColors . at newCubeID ?= ourColor
-        liftIO . atomically $ writeTChan (tcOutgoingPackets transceiver) (Reliable (CreateObject newCubeID pose ourColor))
+            message = CreateObject newCubeID pose ourColor
+        interpretReliable message
+        liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable message
       _ -> return ()
 
     ---------
@@ -146,11 +150,18 @@ main = do
     uniformV3 uCamLocation playerPos
 
     newCubes <- use cubePoses
-    withVAO ( vAO cube ) $ 
+    newPlayers <- use playerPoses
+    withVAO ( vAO cube ) $ do
       forM_ ( Map.toList newCubes ) $ \( objID , pose ) -> do
 
         let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
         color <- fromMaybe (V4 0 1 0 1) <$> use (cubeColors . at objID)
+
+        drawEntity cube model projectionView color
+      forM_ ( Map.toList newPlayers ) $ \( playerID , pose ) -> do
+
+        let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
+        color <- fromMaybe (V4 0 1 0 1) <$> use (playerColors . at playerID)
 
         drawEntity cube model projectionView color
 
