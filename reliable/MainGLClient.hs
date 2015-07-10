@@ -117,15 +117,17 @@ main = do
     --------------------
     -- Process UI events
     --------------------
-    processEvents events $ \e -> case e of
-      MouseButton _ MouseButtonState'Pressed _ -> do
-        newCubeID <- liftIO randomIO
-        randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
-        let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
-            message = CreateObject newCubeID pose ourColor
-        interpretReliable message
-        liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable message
-      _ -> return ()
+    processEvents events $ \e -> do
+      closeOnEscape window e
+      case e of
+        MouseButton _ MouseButtonState'Pressed _ -> do
+          newCubeID <- liftIO randomIO
+          randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
+          let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
+              message = CreateObject newCubeID pose ourColor
+          interpretReliable message
+          liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable message
+        _ -> return ()
 
     ---------
     -- Render
