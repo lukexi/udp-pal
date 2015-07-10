@@ -3,17 +3,19 @@
 {-# LANGUAGE TupleSections             #-}
 
 import           Linear
-import Control.Concurrent.STM
 import qualified Data.Map               as Map
 import           Control.Concurrent
+import           Control.Concurrent.STM
 
 import           Network.UDP.Pal
 import           Control.Monad.State
 import           Control.Lens
-import Network.Socket
+import           Network.Socket
+import           Data.Time
 
-import Types
-import Data.Time
+import           Types
+
+
 main :: IO ()
 main = do
   putStrLn "GL Server running."

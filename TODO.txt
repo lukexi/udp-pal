@@ -62,3 +62,33 @@ http://ithare.com/64-network-dos-and-donts-for-game-engines-part-iv-great-tcp-vs
 
 Splines for physics interp
 http://phaazon.blogspot.fr/2015/06/smoothie-03-bezier-curves-and-new-user.html
+
+
+
+
+
+
+
+DONE:
+[x] Add cube coloring
+[x] Support multiple clients
+[x] Choose random color for each client, add to cube message
+[x] Make sure cubes make it across correctly
+[x] Add keepalive 
+[x] Add "quit commands" (i.e. delete this object)
+    Transmit these at the start? Or make these configurable.
+[x] Add avatars that travel in a circle at different speeds
+
+[x] Have the Transceiver hold a TVar of the last time it received a message
+    Users of the Transceiver can check this against the current time to decide if
+    they want to mark it as dead.
+
+    The server will check each client (maybe in findClient, even?) periodically and
+    kill the Transceiver if it is too old.
+    The server can then use its own broadcast channel to broadcast a reliable message saying that the
+    client is dead, which the app threads can pickup and use to clean up the client.
+
+[x] Add tweak to the Transceiver that allows passing in an initial _connUnacked value
+    and have the server start all new clients with a full historically-accumulated connUnacked.
+    (be sure to handle the copying of the history with the cloning of the broadcastChan in a single transaction!)
+

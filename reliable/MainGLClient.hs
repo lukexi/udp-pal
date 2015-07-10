@@ -29,37 +29,24 @@ import Types
 {-
 
 NEXT UP:
-[x] Add cube coloring
-[x] Support multiple clients
-[x] Choose random color for each client, add to cube message
-[x] Make sure cubes make it across correctly
-[x] Add keepalive 
-[x] Add "quit commands" (i.e. delete this object)
-    Transmit these at the start? Or make these configurable.
-[x] Add avatars that travel in a circle at different speeds
 
-[ ] Add tweak to the Transceiver that allows passing in an initial _connUnacked value
-    and have the server start all new clients with a full historically-accumulated connUnacked.
-    (be sure to handle the copying of the history with the cloning of the broadcastChan in a single transaction!)
+
 
 -}
 
 {-
 SERVER LOGIC:
-Reliable messages from clients (like 'CreateCube') should be broadcasted  (with a new seqNum) to all except the sender
-Unreliable messages from clients (like 'ObjectPose') should be broadcasted to all except the sender
-Server unreliable sim messages should be broadcasted to all clients
-  clients should be ready for updates to non-existent objects and ignore them
+[x] Reliable messages from clients (like 'CreateCube') should be broadcasted  (with a new seqNum) to all except the sender
+    Unreliable messages from clients (like 'ObjectPose') should be broadcasted to all except the sender
+    Server unreliable sim messages should be broadcasted to all clients
+      clients should be ready for updates to non-existent objects and ignore them
 
-Let's try starting with having the server expire cubes since it has to anyway.
-Can add having the client expire them too (locally, no network message) later.
+[ ] Let's try starting with having the server expire cubes since it has to anyway.
+    Can add having the client expire them too (locally, no network message) later.
 
-Try making the above configurable for the server setup we've got 
-(i.e. create a server configured to handle messages in the above way)
+[ ] Try making the above configurable for the server setup we've got 
+    (i.e. create a server configured to handle messages in the above way)
 
--}
-
-{-
 
 Client sends hand and head updates unreliably to the server.
 Server receives all these and broadcasts every frame to the all clients.
