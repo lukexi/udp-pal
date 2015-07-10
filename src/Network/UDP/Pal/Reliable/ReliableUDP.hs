@@ -11,12 +11,10 @@ import Control.Lens
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Network.UDP.Pal.Reliable.Types
-import Network.UDP.Pal.Socket
-import Network.UDP.Pal.Types
--- import Control.Concurrent
-import Data.Monoid
--- import Data.Maybe
--- import Data.ByteString (ByteString)
+import           Network.UDP.Pal.Socket
+import           Network.UDP.Pal.Types
+
+import           Data.Monoid
 
 -----------
 -- Reliable

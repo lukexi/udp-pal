@@ -36,7 +36,11 @@ NEXT UP:
 [x] Add keepalive 
 [x] Add "quit commands" (i.e. delete this object)
     Transmit these at the start? Or make these configurable.
-[ ] Add avatars that travel in a circle at different speeds
+[x] Add avatars that travel in a circle at different speeds
+
+[ ] Add tweak to the Transceiver that allows passing in an initial _connUnacked value
+    and have the server start all new clients with a full historically-accumulated connUnacked.
+    (be sure to handle the copying of the history with the cloning of the broadcastChan in a single transaction!)
 
 -}
 

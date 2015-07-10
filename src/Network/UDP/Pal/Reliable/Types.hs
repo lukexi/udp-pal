@@ -6,8 +6,8 @@ import           Control.Lens
 import           Data.Binary
 import           Data.Map     (Map)
 import           GHC.Generics
-import Control.Concurrent.STM
-import Data.Time
+import           Control.Concurrent.STM
+import           Data.Time
 
 -- Each packet is tagged with a monotonic sequence number.
 -- On each transmission, we send all packets in order, over and over,

@@ -3,9 +3,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.UDP.Pal.Reliable.Transceiver where
+
 import           Control.Concurrent.STM
 import           Network.UDP.Pal.Socket
-import Network.UDP.Pal.Types
+import           Network.UDP.Pal.Types
 import           Network.UDP.Pal.Reliable.Types
 
 import           Control.Concurrent
@@ -14,8 +15,8 @@ import           Control.Monad.State
 import           Halive.Concurrent
 import           Network.UDP.Pal.Reliable.ReliableUDP
 import           Network.Socket (getSocketName)
-import Data.Binary
-import Data.Time
+import           Data.Binary
+import           Data.Time
 
 streamInto :: TChan a -> IO a -> IO ThreadId
 streamInto channel action =
