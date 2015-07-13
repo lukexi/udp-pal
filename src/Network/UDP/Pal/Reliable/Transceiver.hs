@@ -39,35 +39,35 @@ exhaustChan chan = go mempty
       Just msg -> go (accum ++ [msg])
       Nothing -> return accum
 
-createTransceiverToAddress :: forall u r. (Binary u, Binary r)
+createTransceiverToAddress :: forall r. (Binary r)
                            => HostName
                            -> PortNumber
                            -> Int
-                           -> IO (Transceiver u r)
+                           -> IO (Transceiver r)
 createTransceiverToAddress serverName serverPort packetSize = do
   toServerSock <- socketWithDest serverName serverPort packetSize
   transceiver <- createTransceiver "Client" (Left toServerSock) mempty
   -- Stream received packets into the Transceiver's packetsIn channel
   _receiveThread <- streamInto (tcIncomingRawPackets transceiver) 
-    (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket u r))
+    (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket r))
 
   displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
   putStrLn $ "*** Launched client: " ++ displayName
 
   return transceiver
 
-createTransceiver :: forall u r. (Binary u, Binary r)
+createTransceiver :: forall r. (Binary r)
                   => String
                   -> Either SocketWithDest ConnectedSocket
                   -> Map SeqNum r
-                  -> IO (Transceiver u r)
+                  -> IO (Transceiver r)
 createTransceiver _name eitherSocket initialUnacked = do
   incomingRawPackets  <- newTChanIO
   verifiedPackets     <- newTChanIO
   outgoingPackets     <- newTChanIO
   lastMessageTime     <- newTVarIO =<< getCurrentTime
   
-  let conn = (newTransceiverState :: TransceiverState u r)
+  let conn = (newTransceiverState :: TransceiverState r)
                 & connUnacked .~ initialUnacked
                 & connNextSeqNumTo .~ 
                     if Map.null initialUnacked then 0 else (succ . fst . Map.findMax) initialUnacked
@@ -96,7 +96,7 @@ createTransceiver _name eitherSocket initialUnacked = do
         liftIO . atomically . writeTVar lastMessageTime =<< liftIO getCurrentTime
       
       -- Each outgoing packet can be sent as Reliable or Unreliable.
-      forM_ (outgoing :: [AppPacket u r]) $ \case
+      forM_ (outgoing :: [AppPacket r]) $ \case
         -- Reliable packets are sent again and again until they are acknowledged 
         -- by receiveAck via a ReliablePacketAck message (below, in 'incoming')
         Reliable reliablePacket -> sendReliable eitherSocket reliablePacket 
@@ -105,7 +105,7 @@ createTransceiver _name eitherSocket initialUnacked = do
         Unreliable unreliableBundle -> do
           bundleNum <- connNextBundleNum <<%= succ
           liftIO $ forM_ unreliableBundle $ \piece ->
-            sendUnreliablePacket (UnreliablePacket bundleNum piece :: WirePacket u r)
+            sendUnreliablePacket (UnreliablePacket bundleNum piece :: WirePacket r)
       
       -- Each incoming packet can be a piece of an Unreliable bundle,
       -- a Reliable packet, or an acknowledgement of 
@@ -125,7 +125,7 @@ createTransceiver _name eitherSocket initialUnacked = do
         -- We then send back an acknowledgement of them and pass them along to the application.
         ReliablePacket seqNum payload ->
           collectReliablePacket seqNum $ liftIO $ do
-            _ <- sendUnreliablePacket (ReliablePacketAck seqNum :: WirePacket u r)
+            _ <- sendUnreliablePacket (ReliablePacketAck seqNum :: WirePacket r)
             liftIO . atomically . writeTChan verifiedPackets $ Reliable payload
         -- Until we receive a ReliablePacketAck, we'll keep sending the unacknowledged
         -- seqNums along using sendReliablePacket (above, in 'outgoing')
@@ -143,7 +143,7 @@ createTransceiver _name eitherSocket initialUnacked = do
 
 
 -- Start a watchdog to make sure we are still receiving messages
-addWatchdog :: Transceiver u r -> IO () -> IO ()
+addWatchdog :: Transceiver r -> IO () -> IO ()
 addWatchdog transceiver finalizer = void . forkIO' $ do
   let loop = do
         isExpired <- (>1) <$> (diffUTCTime <$> getCurrentTime <*> atomically (readTVar (tcLastMessageTime transceiver)))

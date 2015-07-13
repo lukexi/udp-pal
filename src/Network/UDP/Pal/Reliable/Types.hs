@@ -21,35 +21,35 @@ newtype BundleNum = BundleNum
   deriving (Eq, Show, Ord, Num, Enum, Binary)
 
 -- These are the packets that are actually serialized over the wire
-data WirePacket u r = UnreliablePacket  BundleNum u
-                    | ReliablePacket    SeqNum    r
+data WirePacket r = UnreliablePacket BundleNum r
+                    | ReliablePacket    SeqNum r
                     | ReliablePacketAck SeqNum
                     | KeepAlive
                     deriving (Show, Generic)
-instance (Binary u, Binary r) => Binary (WirePacket u r)
+instance (Binary r) => Binary (WirePacket r)
 
 -- These are packets submitted to and received from the Transceiver
-data AppPacket u r = Unreliable [u] | Reliable r deriving Show
+data AppPacket r = Unreliable [r] | Reliable r deriving Show
 
 -- The data necessary to track the retransmission of
 -- unacknowledged reliable packets.
-data TransceiverState u r = TransceiverState
+data TransceiverState r = TransceiverState
   { _connNextSeqNumTo   :: SeqNum
   , _connNextSeqNumFrom :: SeqNum
   , _connNextBundleNum  :: BundleNum
   , _connUnacked        :: Map SeqNum r
-  , _connBundles        :: Map BundleNum [u]
+  , _connBundles        :: Map BundleNum [r]
   }
 
 makeLenses ''TransceiverState
 
-newTransceiverState :: (Binary u, Binary r) => TransceiverState u r
+newTransceiverState :: Binary r => TransceiverState r
 newTransceiverState = TransceiverState 0 0 0 mempty mempty
 
-data Transceiver u r = Transceiver 
-  { tcIncomingRawPackets :: TChan (WirePacket u r)
-  , tcVerifiedPackets    :: TChan (AppPacket  u r)
-  , tcOutgoingPackets    :: TChan (AppPacket  u r)
+data Transceiver r = Transceiver 
+  { tcIncomingRawPackets :: TChan (WirePacket r)
+  , tcVerifiedPackets    :: TChan (AppPacket  r)
+  , tcOutgoingPackets    :: TChan (AppPacket  r)
   , tcLastMessageTime    :: TVar UTCTime
   , tcShutdown           :: IO ()
   }

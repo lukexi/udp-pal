@@ -32,11 +32,11 @@ TODO:
 -- and broadcasts them to all listening clients. Returns a channel that
 -- can broadcast to all listening clients.
 
-createServer :: forall u r. (Binary u, Binary r, Show r) 
+createServer :: forall r. (Binary r, Show r) 
              => HostName 
              -> PortNumber 
              -> PacketSize 
-             -> IO (TChan (SockAddr, AppPacket u r), TChan SockAddr)
+             -> IO (TChan (SockAddr, AppPacket r), TChan SockAddr)
 createServer serverName serverPort packetSize = do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   let finallyClose = flip finally (close (bsSocket incomingSocket))
@@ -101,7 +101,7 @@ createServer serverName serverPort packetSize = do
     transceiver <- findClient fromAddr
 
     -- Pass the decoded packet into the client's Transceiver's incomingRawPackets channel
-    let packet = decode' newMessage :: WirePacket u r
+    let packet = decode' newMessage :: WirePacket r
     atomically $ writeTChan (tcIncomingRawPackets transceiver) packet
 
   return (broadcastChan, disconnectionsChan)

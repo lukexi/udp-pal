@@ -29,14 +29,11 @@ data ObjectOp
   = CreateObject ObjectID Pose Color
   | ConnectClient PlayerID Pose Color
   | DisconnectClient PlayerID
+  | ObjectPose ObjectID Pose
+  | PlayerPose PlayerID Pose
   deriving (Show, Generic)
 instance Binary ObjectOp
 
-data ObjectPose
-  = ObjectPose ObjectID Pose
-  | PlayerPose PlayerID Pose
-  deriving (Show, Generic)
-instance Binary ObjectPose
 
 
 data AppState = AppState 
@@ -74,6 +71,7 @@ interpretReliable (CreateObject objID pose color) = do
   liftIO $ print (CreateObject objID pose color)
   cubePoses . at objID ?= pose
   cubeColors . at objID ?= color
+
 interpretReliable (ConnectClient playerID pose color) = do
   liftIO $ putStrLn $ "Hello, " ++ playerID
   playerPoses  . at playerID ?= pose
@@ -84,13 +82,13 @@ interpretReliable (DisconnectClient playerID) = do
   playerColors . at playerID .= Nothing
   liftIO $ putStrLn $ "Goodbye, " ++ playerID
 
-interpretUnreliable :: (MonadIO m, MonadState AppState m) => ObjectPose -> m ()
-interpretUnreliable (ObjectPose objID pose) = do
+interpretReliable (ObjectPose objID pose) = do
   --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
   -- We use traverse here to only set a new value if there's already one there,
   -- to keep unreliable messages from affecting state out of order.
   cubePoses . at objID . traverse .= pose
-interpretUnreliable (PlayerPose objID pose) = do
+interpretReliable (PlayerPose objID pose) = do
   --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
   playerPoses . at objID . traverse .= pose
   --liftIO . print =<< use playerPoses
+

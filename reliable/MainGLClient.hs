@@ -22,14 +22,6 @@ import Types
 import Render
 
 {-
-
-NEXT UP:
-
-
-
--}
-
-{-
 SERVER LOGIC:
 [x] Reliable messages from clients (like 'CreateCube') should be broadcasted  (with a new seqNum) to all except the sender
     Unreliable messages from clients (like 'ObjectPose') should be broadcasted to all except the sender
@@ -82,7 +74,7 @@ main = do
     -------------------------
     liftIO (atomically (exhaustChan tcVerifiedPackets)) >>= mapM_ (\case
         Reliable message -> interpretReliable message
-        Unreliable unrel -> forM_ unrel interpretUnreliable
+        Unreliable unrel -> forM_ unrel interpretReliable
       )
 
     --------------------
@@ -92,12 +84,16 @@ main = do
       closeOnEscape window e
       case e of
         MouseButton _ MouseButtonState'Pressed _ -> do
+
+          -- Add a cube at a random location
           newCubeID <- liftIO randomIO
           randomPos <- liftIO $ V3 <$> randomRIO (-1, 1) <*> randomRIO (-1, 1) <*> randomRIO (0, -5)
           let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
               message = CreateObject newCubeID pose ourColor
+
           interpretReliable message
           liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable message
+
         _ -> return ()
 
     ---------

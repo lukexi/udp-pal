@@ -26,11 +26,15 @@ main = do
   let getPacketsFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
       broadcastToClients    = liftIO . atomically . writeTChan broadcastChan . (ourAddr,)
 
-  -- Launch the server's main thread to run physics simulations
+  -- The server's main thread then runs physics simulations
   void . flip runStateT emptyAppState . forever $ do
     
     disconnections <- liftIO (atomically (exhaustChan disconnectionsChan))
     forM_ disconnections $ \fromAddr -> do
+      -- For each SockAddr we've detected a disconnection from,
+      -- find its associated player ID and broadcast a message to clients
+      -- informing them that the player has left so they can clear any
+      -- visible rendering of that player.
       liftIO $ putStrLn $ "GOODBYE: " ++ show fromAddr
       Just playerID <- use $ playerIDs . at fromAddr
       playerIDs . at fromAddr .= Nothing
@@ -40,25 +44,24 @@ main = do
 
     -- Process new packets
     packets <- getPacketsFromClients
-    forM_ packets $ \(fromAddr, message) -> case message of
-      Reliable   rel@(ConnectClient playerID _pose _color) -> do
+    forM_ packets $ \(fromAddr, msg) -> case msg of
+      Reliable   message@(ConnectClient playerID _pose _color) -> do
         -- Associate the playerID with the fromAddr we already know,
         -- so we can send an accurate disconnect message later
         playerIDs . at fromAddr ?= playerID
-        interpretReliable rel
-        liftIO . putStrLn $ "Associated " ++ show fromAddr ++ " with userID " ++ playerID
-      Reliable   rel -> interpretReliable rel
+        interpretReliable message
+      Reliable   message -> interpretReliable message
       Unreliable _clientPose -> do
         return ()
 
     -- Run physics
     cubePoses . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
     cubes <- use $ cubePoses . to Map.toList
-    let objPoses = map (\(cubeID, pose) -> ObjectPose cubeID pose) cubes
+    let objPoses = map (uncurry ObjectPose) cubes
 
     now <- realToFrac . utctDayTime <$> liftIO getCurrentTime
     poses <- use playerPoses
-    let plrPoses = map (\(playerID, pose) -> PlayerPose playerID pose)
+    let plrPoses = map (uncurry PlayerPose)
           (Map.toList $ 
             poses &~ traversed . posPosition . _xy += V2 (sin now) (cos now)
             )

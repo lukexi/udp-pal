@@ -18,31 +18,31 @@ import           Data.Monoid
 -----------
 -- Reliable
 -----------
-queueReliable :: (MonadIO m, MonadState (TransceiverState u r) m, Binary r) => r -> m ()
+queueReliable :: (MonadIO m, MonadState (TransceiverState r) m, Binary r) => r -> m ()
 queueReliable payload = do
   seqNum <- connNextSeqNumTo <<%= succ
   connUnacked . at seqNum ?= payload
 
 -- | Discard all packets less than the acknowledged sequence number
 -- Server should send acks with every message to the client to ensure redundancy.
-receiveAck :: MonadState (TransceiverState u r) m => SeqNum -> m ()
+receiveAck :: MonadState (TransceiverState r) m => SeqNum -> m ()
 receiveAck seqNum = do
   unacked <- use connUnacked
   let (_smaller, larger) = Map.split seqNum unacked
   connUnacked .= larger
 
-sendReliable :: forall u r m. (Binary u, Binary r, MonadIO m, MonadState (TransceiverState u r) m)
+sendReliable :: forall r m. (Binary r, MonadIO m, MonadState (TransceiverState r) m)
              => Either SocketWithDest ConnectedSocket -> r -> m ()
 sendReliable sock message = do
   queueReliable message
   purgeReliable sock
 
-purgeReliable :: forall u r m. (Binary u, Binary r, MonadIO m, MonadState (TransceiverState u r) m)
+purgeReliable :: forall r m. (Binary r, MonadIO m, MonadState (TransceiverState r) m)
              => Either SocketWithDest ConnectedSocket -> m ()
 purgeReliable sock = do
   reliablePackets <- use connUnacked
   forM_ (Map.toList reliablePackets) $ \(seqNum, payload) ->
-    sendBinaryE sock (ReliablePacket seqNum payload :: WirePacket u r)
+    sendBinaryE sock (ReliablePacket seqNum payload :: WirePacket r)
 
 sendBinaryE :: (MonadIO m, Binary r) => Either SocketWithDest ConnectedSocket -> r -> m Int
 sendBinaryE sock = either sendBinary sendBinaryConn sock
@@ -50,7 +50,7 @@ sendBinaryE sock = either sendBinary sendBinaryConn sock
 -- | Given the seqNum of a newly-received reliable packet,
 -- checkes if the seqNum is the successor of the last one we received.
 -- If so, records the new seqNum and calls the given action; otherwise, does nothing.
-collectReliablePacket :: MonadState (TransceiverState u r) m
+collectReliablePacket :: MonadState (TransceiverState r) m
                       => SeqNum -> m () -> m ()
 collectReliablePacket seqNum action = do
   nextSeqNumFrom <- use connNextSeqNumFrom
@@ -61,10 +61,10 @@ collectReliablePacket seqNum action = do
 -------------
 -- Unreliable
 -------------
-collectUnreliablePacket :: MonadState (TransceiverState u r) m
+collectUnreliablePacket :: MonadState (TransceiverState r) m
                         => BundleNum
-                        -> u
-                        -> m (Maybe [u])
+                        -> r
+                        -> m (Maybe [r])
 collectUnreliablePacket bundleNum payload = do
   -- Ignore bundle pieces that are older than our oldest buffered bundle
   bundles <- use connBundles
