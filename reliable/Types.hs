@@ -12,6 +12,7 @@ import           Control.Lens
 import           Control.Monad.State
 import           Data.Map (Map)
 import           Network.UDP.Pal
+import           System.Random
 
 data Pose = Pose
   { _posPosition    :: V3 GLfloat
@@ -30,6 +31,7 @@ data ObjectOp
   | DisconnectClient PlayerID
   deriving (Show, Generic)
 instance Binary ObjectOp
+
 data ObjectPose
   = ObjectPose ObjectID Pose
   | PlayerPose PlayerID Pose
@@ -58,7 +60,14 @@ serverName = "127.0.0.1"
 packetSize :: Int
 packetSize = 4096
 
+randomName :: IO String
+randomName = concat <$> replicateM 3 randomPair
+  where
+    randomPair = (\(x,y) -> [x,y]) . (pairs !!) <$> randomRIO (0, length pairs - 1)
+    pairs = zip "bcdfghjklmnpqrstvwxz" (cycle "aeiouy")
 
+randomColor :: MonadIO m => m (V4 GLfloat)
+randomColor = liftIO $ V4 <$> randomRIO (0, 1) <*> randomRIO (0, 1) <*> randomRIO (0, 1) <*> pure 1
 
 interpretReliable :: (MonadIO m, MonadState AppState m) => ObjectOp -> m ()
 interpretReliable (CreateObject objID pose color) = do
