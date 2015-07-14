@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE TupleSections             #-}
+
 module Network.UDP.Pal.Reliable.Server where
 
 import qualified Data.Map               as Map
@@ -18,7 +19,7 @@ import           Control.Monad.State
 import           Control.Exception
 
 import           Data.Binary
-
+import           Network.Socket
 
 {-
 
@@ -32,11 +33,13 @@ TODO:
 -- and broadcasts them to all listening clients. Returns a channel that
 -- can broadcast to all listening clients.
 
-createServer :: forall r. (Binary r, Show r) 
+createServer :: forall r m. (Binary r, MonadIO m) 
              => HostName 
              -> PortNumber 
              -> PacketSize 
-             -> IO (TChan (SockAddr, AppPacket r), TChan SockAddr)
+             -> IO (m [(SockAddr, AppPacket r)], -- Get packets from clients
+                    AppPacket r -> m (),         -- Send a packet to all clients
+                    TChan SockAddr)              -- Hear about disconnections
 createServer serverName serverPort packetSize = do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   let finallyClose = flip finally (close (bsSocket incomingSocket))
@@ -48,12 +51,14 @@ createServer serverName serverPort packetSize = do
     (,,) <$> dupTChan broadcastChan
          <*> newTVar mempty
          <*> newTVar 0
+  -- Create a process to collect all reliable messages, 
+  -- so we can catch new clients up with everything that's happend.
   _ <- forkIO' . forever . atomically $ do
     (_fromAddr, newItem) <- readTChan reliableStateChan
     case newItem of
       Reliable relItem -> do
-        seqNum               <- readTVar reliableStateSeqNum
-        reliableState        <- readTVar reliableStateAccum
+        seqNum        <- readTVar reliableStateSeqNum
+        reliableState <- readTVar reliableStateAccum
         writeTVar reliableStateSeqNum (succ seqNum)
         writeTVar reliableStateAccum (Map.insert seqNum relItem reliableState)
       _ -> return ()
@@ -69,15 +74,17 @@ createServer serverName serverPort packetSize = do
       newServerToClientThread fromAddr = do
         toClientSock                <- connectedSocketToAddr fromAddr
 
+        -- Duplicate the broadcast chan so the client can receive broadcasts,
+        -- and create a copy of the reliable state sent thus far to catch the client up with.
         (broadcastsToClient, reliableState) <- atomically $ do
           (,) <$> dupTChan broadcastChan
               <*> readTVar reliableStateAccum
-        liftIO . print $ reliableState
+        
         transceiver@Transceiver{..} <- createTransceiver "Server" (Right toClientSock) reliableState
 
-        -- Send verified packets to all clients
+        -- Send verified packets to all clients, tagged with this clients address
         incomingThread <- streamInto broadcastChan ((fromAddr,) <$> atomically (readTChan tcVerifiedPackets))
-        -- Send all broadcasts to this client
+        -- Send all broadcasts to this client, except messages we sent ourselves
         outgoingThread <- streamIntoMaybe tcOutgoingPackets 
           ((\(bcastFrom, msg) -> 
             if bcastFrom == fromAddr then Nothing else Just msg) <$> atomically (readTChan broadcastsToClient))
@@ -104,4 +111,10 @@ createServer serverName serverPort packetSize = do
     let packet = decode' newMessage :: WirePacket r
     atomically $ writeTChan (tcIncomingRawPackets transceiver) packet
 
-  return (broadcastChan, disconnectionsChan)
+  ourAddr <- addrAddress <$> addressInfo (Just serverName) (Just (show serverPort))
+  packetsFromClients <- atomically $ dupTChan broadcastChan
+  let broadcastToClients    = liftIO . atomically . writeTChan broadcastChan . (ourAddr,)
+      getPacketsFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
+
+  return (getPacketsFromClients, broadcastToClients, disconnectionsChan)
+

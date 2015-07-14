@@ -66,16 +66,13 @@ main = do
   ------------------
   (window, events, cube) <- initRenderer
 
-  newWorld <- execStateT (interpretReliable ourConnectMessage) emptyAppState
+  newWorld <- execStateT (interpretToState ourConnectMessage) emptyAppState
 
   void . flip runStateT newWorld . whileWindow window $ do
     -------------------------
     -- Process network events
     -------------------------
-    liftIO (atomically (exhaustChan tcVerifiedPackets)) >>= mapM_ (\case
-        Reliable message -> interpretReliable message
-        Unreliable unrel -> forM_ unrel interpretReliable
-      )
+    interpretNetworkPackets tcVerifiedPackets interpretToState
 
     --------------------
     -- Process UI events
@@ -91,7 +88,7 @@ main = do
           let pose = Pose randomPos (axisAngle (V3 0 1 0) 0)
               message = CreateObject newCubeID pose ourColor
 
-          interpretReliable message
+          interpretToState message
           liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable message
 
         _ -> return ()

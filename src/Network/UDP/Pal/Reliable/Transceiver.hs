@@ -20,6 +20,25 @@ import           Data.Time
 import qualified Data.Map as Map
 import           Data.Map (Map)
 
+
+interpredNetworkPacketsFromOthers :: (MonadIO m) 
+                                  => m [(SockAddr, AppPacket a)]
+                                  -> (SockAddr -> a -> m ()) 
+                                  -> m ()
+interpredNetworkPacketsFromOthers getPacketsFromClients intepretFunc = do
+  packetsWithOrigin <- getPacketsFromClients
+  forM_ packetsWithOrigin $ \(fromAddr, msg) -> case msg of
+    Reliable   message -> intepretFunc fromAddr message
+    Unreliable messages -> forM_ messages (intepretFunc fromAddr)
+
+interpretNetworkPackets :: MonadIO m => TChan (AppPacket a) -> (a -> m ()) -> m ()
+interpretNetworkPackets verifiedPacketsChan intepretFunc = 
+  liftIO (atomically (exhaustChan verifiedPacketsChan)) 
+    >>= mapM_ (\case
+        Reliable message -> intepretFunc message
+        Unreliable messages -> forM_ messages intepretFunc
+      )
+
 streamInto :: TChan a -> IO a -> IO ThreadId
 streamInto channel action =
   forkIO . forever $

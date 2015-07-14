@@ -66,28 +66,28 @@ randomName = concat <$> replicateM 3 randomPair
 randomColor :: MonadIO m => m (V4 GLfloat)
 randomColor = liftIO $ V4 <$> randomRIO (0, 1) <*> randomRIO (0, 1) <*> randomRIO (0, 1) <*> pure 1
 
-interpretReliable :: (MonadIO m, MonadState AppState m) => ObjectOp -> m ()
-interpretReliable (CreateObject objID pose color) = do
+interpretToState :: (MonadIO m, MonadState AppState m) => ObjectOp -> m ()
+interpretToState (CreateObject objID pose color) = do
   liftIO $ print (CreateObject objID pose color)
   cubePoses . at objID ?= pose
   cubeColors . at objID ?= color
 
-interpretReliable (ConnectClient playerID pose color) = do
+interpretToState (ConnectClient playerID pose color) = do
   liftIO $ putStrLn $ "Hello, " ++ playerID
   playerPoses  . at playerID ?= pose
   playerColors . at playerID ?= color
 
-interpretReliable (DisconnectClient playerID) = do
+interpretToState (DisconnectClient playerID) = do
   playerPoses  . at playerID .= Nothing
   playerColors . at playerID .= Nothing
   liftIO $ putStrLn $ "Goodbye, " ++ playerID
 
-interpretReliable (ObjectPose objID pose) = do
+interpretToState (ObjectPose objID pose) = do
   --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
   -- We use traverse here to only set a new value if there's already one there,
   -- to keep unreliable messages from affecting state out of order.
   cubePoses . at objID . traverse .= pose
-interpretReliable (PlayerPose objID pose) = do
+interpretToState (PlayerPose objID pose) = do
   --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
   playerPoses . at objID . traverse .= pose
   --liftIO . print =<< use playerPoses

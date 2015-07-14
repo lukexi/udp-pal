@@ -10,7 +10,6 @@ import           Control.Concurrent.STM
 import           Network.UDP.Pal
 import           Control.Monad.State
 import           Control.Lens
-import           Network.Socket
 import           Data.Time
 
 import           Types
@@ -20,11 +19,9 @@ main :: IO ()
 main = do
   putStrLn "GL Server running."
 
-  (broadcastChan, disconnectionsChan) <- createServer serverName serverPort packetSize
-  ourAddr <- addrAddress <$> addressInfo (Just serverName) (Just (show serverPort))
-  packetsFromClients <- atomically $ dupTChan broadcastChan
-  let getPacketsFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
-      broadcastToClients    = liftIO . atomically . writeTChan broadcastChan . (ourAddr,)
+  (getPacketsFromClients, broadcastToClients, disconnectionsChan) <- createServer serverName serverPort packetSize
+  
+  
 
   -- The server's main thread then runs physics simulations
   void . flip runStateT emptyAppState . forever $ do
@@ -39,20 +36,17 @@ main = do
       Just playerID <- use $ playerIDs . at fromAddr
       playerIDs . at fromAddr .= Nothing
       let message = DisconnectClient playerID
-      interpretReliable message
+      interpretToState message
       broadcastToClients (Reliable message)
 
     -- Process new packets
-    packets <- getPacketsFromClients
-    forM_ packets $ \(fromAddr, msg) -> case msg of
-      Reliable   message@(ConnectClient playerID _pose _color) -> do
+    interpredNetworkPacketsFromOthers getPacketsFromClients $ \fromAddr msg -> case msg of
+      message@(ConnectClient playerID _pose _color) -> do
         -- Associate the playerID with the fromAddr we already know,
         -- so we can send an accurate disconnect message later
         playerIDs . at fromAddr ?= playerID
-        interpretReliable message
-      Reliable   message -> interpretReliable message
-      Unreliable _clientPose -> do
-        return ()
+        interpretToState message
+      message -> interpretToState message
 
     -- Run physics
     cubePoses . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
