@@ -18,11 +18,9 @@ import           Types
 main :: IO ()
 main = do
   putStrLn "GL Server running."
-
+  
   (getPacketsFromClients, broadcastToClients, disconnectionsChan) <- createServer serverName serverPort packetSize
   
-  
-
   -- The server's main thread then runs physics simulations
   void . flip runStateT emptyAppState . forever $ do
     
@@ -32,12 +30,14 @@ main = do
       -- find its associated player ID and broadcast a message to clients
       -- informing them that the player has left so they can clear any
       -- visible rendering of that player.
-      liftIO $ putStrLn $ "GOODBYE: " ++ show fromAddr
+
       Just playerID <- use $ playerIDs . at fromAddr
       playerIDs . at fromAddr .= Nothing
       let message = DisconnectClient playerID
       interpretToState message
       broadcastToClients (Reliable message)
+
+      liftIO $ putStrLn $ "Goodbye: " ++ show fromAddr
 
     -- Process new packets
     interpredNetworkPacketsFromOthers getPacketsFromClients $ \fromAddr msg -> case msg of

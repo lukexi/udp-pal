@@ -1,11 +1,11 @@
 module Network.UDP.Pal.Types 
-  ( HostName
+  ( module Network.UDP.Pal.Types
+  , HostName
   , PortNumber
   , SockAddr(..)
-  , module Network.UDP.Pal.Types
   ) where
 
-import           Network.Socket hiding (recv, recvFrom, send, sendTo)
+import           Network.Socket
 
 data BoundSocket = BoundSocket
   { bsSocket     :: Socket

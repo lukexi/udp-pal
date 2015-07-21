@@ -30,7 +30,7 @@ data Uniforms = Uniforms
 resX, resY :: Int
 resX=1024; resY=768
 
-initRenderer :: IO (Window, TChan Event, Entity Uniforms)
+initRenderer :: IO (Window, Events, Entity Uniforms)
 initRenderer = do
   (window, events) <- createWindow "ReliableCubes" resX resY
 

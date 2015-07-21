@@ -20,6 +20,8 @@ import           Data.Time
 import qualified Data.Map as Map
 import           Data.Map (Map)
 
+writeTransceiver :: MonadIO m => Transceiver r -> AppPacket r -> m ()
+writeTransceiver transceiver = liftIO . atomically . writeTChan (tcOutgoingPackets transceiver)
 
 interpredNetworkPacketsFromOthers :: (MonadIO m) 
                                   => m [(SockAddr, AppPacket a)]

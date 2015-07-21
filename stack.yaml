@@ -3,12 +3,7 @@ flags:
     integer-simple: false
 packages:
 - '.'
-- ../../Code/stack-ide/stack-ide
-- ../../Code/stack-ide/stack-ide-api
-- ../../Code/ide-backend/ide-backend
 - ../../Code/ide-backend/ide-backend-rts
-- ../../Code/ide-backend/ide-backend-server
-- ../../Code/ide-backend/ide-backend-common
 - ../gl-pal2
 - ../Thop/modules/glfw-pal
 extra-deps:

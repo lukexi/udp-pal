@@ -1,11 +1,20 @@
 TODAY:
 
+
+
+
 [ ] Finish up example with some basic mouse tracking to test client-sent unreliable packets, clicking to add cube in front of position, expiration of cubes.
+
+
 [ ] Add libpd and check out some server driven + client driven tones
+
+
 
 [ ] Think about expiration, which still may be most reliably done
     as a clientside/serverside combo thing where the client auto-expires
     cubes after they've existed for x seconds, and same with server.
+
+
 
 [ ] Get OpenAL basics working, then try streaming libpd to it.
 
@@ -15,12 +24,27 @@ TODAY:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 YESTERDAY:
-[ ] We should possibly have a way to bypass the collector on the server side and just broadcast
-    certain unreliable messages straight out - specifically pose data from players - to avoid
-    adding any latency to them.
-    (consider how this will interact with physics updates, though;
-    it may make things look unsynchronized which might be worse than latency)
 
 [x] Use a small sliding window for unreliable messages,
     e.g. [0,1,2,3,4] are all being assembled, and when we see 5, kick out 0 to always keep 5 values in the buffer.
@@ -53,6 +77,11 @@ YESTERDAY:
     ChangePose 0 (V3 0.1 0.2 0.3) (Quat 0.5 0.7 0.9 0.8)
     etc.
 
+[ ] We should possibly have a way to bypass the collector on the server side and just broadcast
+    certain unreliable messages straight out - specifically pose data from players - to avoid
+    adding any latency to them.
+    (consider how this will interact with physics updates, though;
+    it may make things look unsynchronized which might be worse than latency)
 
 How to do the numbering of unreliable packets so that we get a small buffer?
 
