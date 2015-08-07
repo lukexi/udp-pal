@@ -8,13 +8,13 @@ module Network.UDP.Pal.Types
 import           Network.Socket
 
 data BoundSocket = BoundSocket
-  { bsSocket     :: Socket
-  , bsPacketSize :: Int
+  { bsSocket     :: !Socket
+  , bsPacketSize :: !Int
   } deriving Show
 
 data SocketWithDest = SocketWithDest
-  { swdBoundSocket :: BoundSocket
-  , swdDestination :: AddrInfo
+  { swdBoundSocket :: !BoundSocket
+  , swdDestination :: !AddrInfo
   } deriving Show
 
 newtype ConnectedSocket = ConnectedSocket 

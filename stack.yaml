@@ -1,6 +1,4 @@
 flags:
-  text:
-    integer-simple: false
 packages:
 - '.'
 - ../gl-pal2

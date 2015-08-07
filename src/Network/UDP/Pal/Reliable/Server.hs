@@ -21,14 +21,6 @@ import           Control.Exception
 import           Data.Binary
 import           Network.Socket
 
-{-
-
-TODO:
-
-
-
--}
-
 -- | Creates a server than listens for incoming messages from clients
 -- and broadcasts them to all listening clients. Returns a channel that
 -- can broadcast to all listening clients.

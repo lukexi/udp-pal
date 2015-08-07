@@ -21,24 +21,24 @@ newtype BundleNum = BundleNum
   deriving (Eq, Show, Ord, Num, Enum, Binary)
 
 -- These are the packets that are actually serialized over the wire
-data WirePacket r = UnreliablePacket BundleNum r
-                    | ReliablePacket    SeqNum r
-                    | ReliablePacketAck SeqNum
+data WirePacket r = UnreliablePacket !BundleNum !r
+                    | ReliablePacket    !SeqNum !r
+                    | ReliablePacketAck !SeqNum
                     | KeepAlive
                     deriving (Show, Generic)
 instance (Binary r) => Binary (WirePacket r)
 
 -- These are packets submitted to and received from the Transceiver
-data AppPacket r = Unreliable [r] | Reliable r deriving Show
+data AppPacket r = Unreliable ![r] | Reliable !r deriving Show
 
 -- The data necessary to track the retransmission of
 -- unacknowledged reliable packets.
 data TransceiverState r = TransceiverState
-  { _connNextSeqNumTo   :: SeqNum
-  , _connNextSeqNumFrom :: SeqNum
-  , _connNextBundleNum  :: BundleNum
-  , _connUnacked        :: Map SeqNum r
-  , _connBundles        :: Map BundleNum [r]
+  { _connNextSeqNumTo   :: !SeqNum
+  , _connNextSeqNumFrom :: !SeqNum
+  , _connNextBundleNum  :: !BundleNum
+  , _connUnacked        :: !(Map SeqNum r)
+  , _connBundles        :: !(Map BundleNum [r])
   }
 
 makeLenses ''TransceiverState
