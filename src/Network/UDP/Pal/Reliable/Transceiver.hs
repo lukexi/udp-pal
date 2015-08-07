@@ -11,14 +11,14 @@ import           Network.UDP.Pal.Reliable.Types
 
 import           Control.Concurrent
 import           Control.Lens
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Halive.Concurrent
 import           Network.UDP.Pal.Reliable.ReliableUDP
 import           Network.Socket (getSocketName)
 import           Data.Binary
 import           Data.Time
-import qualified Data.Map as Map
-import           Data.Map (Map)
+import qualified Data.Map.Strict as Map
+import           Data.Map.Strict (Map)
 
 writeTransceiver :: MonadIO m => Transceiver r -> AppPacket r -> m ()
 writeTransceiver transceiver = liftIO . atomically . writeTChan (tcOutgoingPackets transceiver)

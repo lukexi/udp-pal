@@ -5,7 +5,7 @@
 
 module Network.UDP.Pal.Reliable.Server where
 
-import qualified Data.Map               as Map
+import qualified Data.Map.Strict               as Map
 import           Control.Concurrent.STM
 import           Halive.Concurrent
 import           Control.Concurrent
@@ -15,7 +15,7 @@ import           Network.UDP.Pal.Socket
 import           Network.UDP.Pal.Binary
 import           Network.UDP.Pal.Reliable.Types
 import           Network.UDP.Pal.Reliable.Transceiver
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Control.Exception
 
 import           Data.Binary

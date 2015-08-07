@@ -9,8 +9,8 @@ import           Linear
 import           Data.Binary
 
 import           Control.Lens
-import           Control.Monad.State
-import           Data.Map (Map)
+import           Control.Monad.State.Strict
+import           Data.Map.Strict (Map)
 import           Network.UDP.Pal
 import           System.Random
 

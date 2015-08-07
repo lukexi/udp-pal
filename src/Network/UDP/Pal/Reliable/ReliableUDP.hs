@@ -5,10 +5,10 @@
 module Network.UDP.Pal.Reliable.ReliableUDP where
 
 import Data.Binary
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Lens
 
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import           Network.UDP.Pal.Reliable.Types
 import           Network.UDP.Pal.Socket
 import           Network.UDP.Pal.Types

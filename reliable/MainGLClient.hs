@@ -6,7 +6,7 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Network.UDP.Pal
 
 

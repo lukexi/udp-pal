@@ -4,7 +4,7 @@
 module Network.UDP.Pal.Reliable.Types where
 import           Control.Lens
 import           Data.Binary
-import           Data.Map     (Map)
+import           Data.Map.Strict     (Map)
 import           GHC.Generics
 import           Control.Concurrent.STM
 import           Data.Time

@@ -3,12 +3,12 @@
 {-# LANGUAGE TupleSections             #-}
 
 import           Linear
-import qualified Data.Map               as Map
+import qualified Data.Map.Strict               as Map
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import           Network.UDP.Pal
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Control.Lens
 import           Data.Time
 

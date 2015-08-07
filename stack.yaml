@@ -3,7 +3,6 @@ flags:
     integer-simple: false
 packages:
 - '.'
-- ../../Code/ide-backend/ide-backend-rts
 - ../gl-pal2
 - ../Thop/modules/glfw-pal
 extra-deps:
