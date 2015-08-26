@@ -1,3 +1,7 @@
 cabal.sandbox.config
 dist
 .stack-work
+*.aux
+*.hp
+*.prof
+*.ps
