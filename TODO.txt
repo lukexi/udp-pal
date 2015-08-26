@@ -1,3 +1,16 @@
+FIXME:
+
+[ ] Add a 'bounded reliability' mode that only stores e.g. the last 100 messages.
+    In the infinitybox example, it's silly to keep all the history 
+    since we're expiring cubes and there are only 16 active at a time.
+    So we only really care about reliably transmitting the last 32 cube-creation/cube-expiration messages.
+    
+
+
+
+
+
+
 TODAY:
 
 
@@ -6,7 +19,6 @@ TODAY:
 [ ] Finish up example with some basic mouse tracking to test client-sent unreliable packets, clicking to add cube in front of position, expiration of cubes.
 
 
-[ ] Add libpd and check out some server driven + client driven tones
 
 
 
@@ -16,8 +28,9 @@ TODAY:
 
 
 
-[ ] Get OpenAL basics working, then try streaming libpd to it.
+[x] Get OpenAL basics working, then try streaming libpd to it.
 
+[ ] Add libpd and check out some server driven + client driven tones
 
 
 
