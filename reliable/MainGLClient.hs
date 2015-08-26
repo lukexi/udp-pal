@@ -12,14 +12,14 @@ import           Network.UDP.Pal
 
 import           Control.Concurrent.STM
 import           Halive.Concurrent
---import           Control.Lens hiding (view)
+import           Control.Lens hiding (view)
+import           Data.Time
 import           Graphics.UI.GLFW.Pal
 import           Linear
 
-import System.Random
-
-import Types
-import Render
+import           System.Random
+import           Types
+import           Render
 
 {-
 SERVER LOGIC:
@@ -92,6 +92,14 @@ main = do
           liftIO . atomically . writeTChan tcOutgoingPackets $ Reliable message
 
         _ -> return ()
+
+    ---------------------------
+    -- Simulate player movement
+    ---------------------------
+    now <- realToFrac . utctDayTime <$> liftIO getCurrentTime
+    let poseMessage = PlayerPose ourName (ourPose & posPosition . _xy .~ V2 (sin now) (cos now))
+    interpretToState poseMessage
+    liftIO . atomically . writeTChan tcOutgoingPackets $ Unreliable [poseMessage]
 
     ---------
     -- Render

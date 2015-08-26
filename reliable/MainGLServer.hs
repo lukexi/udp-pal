@@ -19,7 +19,7 @@ main :: IO ()
 main = do
   putStrLn "GL Server running."
   
-  (getPacketsFromClients, broadcastToClients, disconnectionsChan) <- createServer serverName serverPort packetSize
+  (receiveFromClients, broadcastToClients, disconnectionsChan) <- createServer serverName serverPort packetSize
   
   -- The server's main thread then runs physics simulations
   void . flip runStateT emptyAppState . forever $ do
@@ -32,7 +32,7 @@ main = do
       -- visible rendering of that player.
 
       Just playerID <- use $ playerIDs . at fromAddr
-      playerIDs . at fromAddr .= Nothing
+      playerIDs . at fromAddr .== Nothing
       let message = DisconnectClient playerID
       interpretToState message
       broadcastToClients (Reliable message)
@@ -40,26 +40,21 @@ main = do
       liftIO $ putStrLn $ "Goodbye: " ++ show fromAddr
 
     -- Process new packets
-    interpredNetworkPacketsFromOthers getPacketsFromClients $ \fromAddr msg -> case msg of
+    interpretNetworkPacketsFromOthers receiveFromClients $ \fromAddr msg -> case msg of
       message@(ConnectClient playerID _pose _color) -> do
         -- Associate the playerID with the fromAddr we already know,
         -- so we can send an accurate disconnect message later
-        playerIDs . at fromAddr ?= playerID
+        playerIDs . at fromAddr ?== playerID
         interpretToState message
       message -> interpretToState message
 
     -- Run physics
-    cubePoses . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
+    cubePoses . traversed . posOrientation *== axisAngle (V3 0 1 0) 0.1
     cubes <- use $ cubePoses . to Map.toList
     let objPoses = map (uncurry ObjectPose) cubes
 
-    now <- realToFrac . utctDayTime <$> liftIO getCurrentTime
-    poses <- use playerPoses
-    let plrPoses = map (uncurry PlayerPose)
-          (Map.toList $ 
-            poses &~ traversed . posPosition . _xy += V2 (sin now) (cos now)
-            )
+    
     --liftIO . putStrLn $ "Sending: " ++ show poses
-    broadcastToClients (Unreliable (objPoses ++ plrPoses))
+    broadcastToClients (Unreliable objPoses)
 
     liftIO $ threadDelay (1000000 `div` 60)

@@ -2,12 +2,12 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE TupleSections             #-}
-
+{-# LANGUAGE BangPatterns              #-}
 module Network.UDP.Pal.Reliable.Server where
 
 import qualified Data.Map.Strict               as Map
 import           Control.Concurrent.STM
-import           Halive.Concurrent
+-- import           Halive.Concurrent
 import           Control.Concurrent
 
 import           Network.UDP.Pal.Types
@@ -45,14 +45,14 @@ createServer serverName serverPort packetSize = do
          <*> newTVar 0
   -- Create a process to collect all reliable messages, 
   -- so we can catch new clients up with everything that's happend.
-  _ <- forkIO' . forever . atomically $ do
+  _ <- forkIO . forever . atomically $ do
     (_fromAddr, newItem) <- readTChan reliableStateChan
     case newItem of
       Reliable relItem -> do
         seqNum        <- readTVar reliableStateSeqNum
         reliableState <- readTVar reliableStateAccum
-        writeTVar reliableStateSeqNum (succ seqNum)
-        writeTVar reliableStateAccum (Map.insert seqNum relItem reliableState)
+        writeTVar reliableStateSeqNum $! (succ seqNum)
+        writeTVar reliableStateAccum  $! (Map.insert seqNum relItem reliableState)
       _ -> return ()
 
   clients <- newMVar mempty
@@ -62,7 +62,8 @@ createServer serverName serverPort packetSize = do
             Just client -> return (currentClients, client)
             Nothing     -> do
               client <- newServerToClientThread fromAddr
-              return (Map.insert fromAddr client currentClients, client)
+              let !newClients = Map.insert fromAddr client currentClients
+              return $! (newClients, client)
       newServerToClientThread fromAddr = do
         toClientSock                <- connectedSocketToAddr fromAddr
 
@@ -75,24 +76,31 @@ createServer serverName serverPort packetSize = do
         transceiver@Transceiver{..} <- createTransceiver "Server" (Right toClientSock) reliableState
 
         -- Send verified packets to all clients, tagged with this clients address
-        incomingThread <- streamInto broadcastChan ((fromAddr,) <$> atomically (readTChan tcVerifiedPackets))
+        incomingThread <- forkIO . forever . atomically $ 
+          writeTChan broadcastChan =<< (fromAddr,) <$> readTChan tcVerifiedPackets
+        -- debug helper to purge the verified queue. stops the memory leak....
+        -- incomingThread <- forkIO . forever $ (atomically (readTChan tcVerifiedPackets)) 
+        
         -- Send all broadcasts to this client, except messages we sent ourselves
-        outgoingThread <- streamIntoMaybe tcOutgoingPackets 
-          ((\(bcastFrom, msg) -> 
-            if bcastFrom == fromAddr then Nothing else Just msg) <$> atomically (readTChan broadcastsToClient))
+        outgoingThread <- forkIO . forever . atomically $ 
+          readTChan broadcastsToClient >>= \case
+            (bcastFrom, msg) 
+              | bcastFrom == fromAddr -> return ()
+              | otherwise             -> writeTChan tcOutgoingPackets msg
 
         -- When the transceiver detects a gap of over a second in messages, kill its threads
         -- and remove the client from the list of clients.
         addWatchdog transceiver $ do
           mapM_ killThread [incomingThread, outgoingThread]
           close (unConnectedSocket toClientSock)
-          modifyMVar_ clients (return . Map.delete fromAddr)
+          modifyMVar_ clients ((return $!) . Map.delete fromAddr)
           atomically $ writeTChan disconnectionsChan fromAddr
         
         return transceiver
 
-  -- Launch the server router thread to route packets to their client's receivers
-  _ <- forkIO' . finallyClose . void . forever $ do
+  -- Launch the server router thread to route incoming packets to 
+  -- their client's receivers, launching them if they don't exist
+  _ <- forkIO . finallyClose . void . forever $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
 
@@ -100,13 +108,17 @@ createServer serverName serverPort packetSize = do
     transceiver <- findClient fromAddr
 
     -- Pass the decoded packet into the client's Transceiver's incomingRawPackets channel
-    let packet = decode' newMessage :: WirePacket r
-    atomically $ writeTChan (tcIncomingRawPackets transceiver) packet
+    -- We don't mind that this is lazily evaluated on the other side of the channel, as that 
+    -- distributes the decoding load to the client thread rather than this single incoming thread.
+    atomically . writeTChan (tcIncomingRawPackets transceiver) $ (decode' newMessage :: WirePacket r)
 
+  -- Get our own address so we can filter messages we ourselves sent
   ourAddr <- addrAddress <$> addressInfo (Just serverName) (Just (show serverPort))
-  packetsFromClients <- atomically $ dupTChan broadcastChan
-  let broadcastToClients    = liftIO . atomically . writeTChan broadcastChan . (ourAddr,)
-      getPacketsFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
 
-  return (getPacketsFromClients, broadcastToClients, disconnectionsChan)
+  -- Get another duplicate to return to the Server-user to get messages from the clients.
+  packetsFromClients <- atomically $ dupTChan broadcastChan
+  let receiveFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
+      broadcastToClients = liftIO . atomically . writeTChan broadcastChan . ((ourAddr,) $!)
+
+  return (receiveFromClients, broadcastToClients, disconnectionsChan)
 

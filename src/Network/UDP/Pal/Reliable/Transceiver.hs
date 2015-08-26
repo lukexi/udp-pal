@@ -23,21 +23,21 @@ import           Data.Map.Strict (Map)
 writeTransceiver :: MonadIO m => Transceiver r -> AppPacket r -> m ()
 writeTransceiver transceiver = liftIO . atomically . writeTChan (tcOutgoingPackets transceiver)
 
-interpredNetworkPacketsFromOthers :: (MonadIO m) 
+interpretNetworkPacketsFromOthers :: (MonadIO m) 
                                   => m [(SockAddr, AppPacket a)]
                                   -> (SockAddr -> a -> m ()) 
                                   -> m ()
-interpredNetworkPacketsFromOthers getPacketsFromClients intepretFunc = do
+interpretNetworkPacketsFromOthers getPacketsFromClients intepretFunc = do
   packetsWithOrigin <- getPacketsFromClients
   forM_ packetsWithOrigin $ \(fromAddr, msg) -> case msg of
-    Reliable   message -> intepretFunc fromAddr message
+    Reliable   message  -> intepretFunc fromAddr message
     Unreliable messages -> forM_ messages (intepretFunc fromAddr)
 
 interpretNetworkPackets :: MonadIO m => TChan (AppPacket a) -> (a -> m ()) -> m ()
 interpretNetworkPackets verifiedPacketsChan intepretFunc = 
   liftIO (atomically (exhaustChan verifiedPacketsChan)) 
     >>= mapM_ (\case
-        Reliable message -> intepretFunc message
+        Reliable message    -> intepretFunc message
         Unreliable messages -> forM_ messages intepretFunc
       )
 
@@ -46,18 +46,11 @@ streamInto channel action =
   forkIO . forever $
     action >>= atomically . writeTChan channel
 
-streamIntoMaybe :: TChan a -> IO (Maybe a) -> IO ThreadId
-streamIntoMaybe channel action =
-  forkIO . forever $
-    action >>= \case
-      Just msg -> atomically . writeTChan channel $ msg
-      Nothing  -> return ()
-
 exhaustChan :: TChan a -> STM [a]
-exhaustChan chan = go mempty
+exhaustChan chan = reverse <$> go mempty
   where
     go !accum = tryReadTChan chan >>= \case
-      Just msg -> go (accum ++ [msg])
+      Just msg -> go (msg:accum)
       Nothing -> return accum
 
 createTransceiverToAddress :: forall r. (Binary r)
@@ -95,12 +88,12 @@ createTransceiver _name eitherSocket initialUnacked = do
       sendUnreliablePacket  = either sendBinary   sendBinaryConn   eitherSocket
 
   -- Start a thread to send periodic keepalive messages to the destination
-  keepAliveThread  <- forkIO' . forever $ do
+  keepAliveThread  <- forkIO . forever $ do
     _ <- sendUnreliablePacket KeepAlive
     threadDelay 100000 -- 0.1 sec
 
 
-  transceiverThread <- forkIO' . void . flip runStateT conn $ do
+  transceiverThread <- forkIO . void . flip runStateT conn $ do
     purgeReliable eitherSocket
     forever $ do
       --liftIO $ putStrLn $ name ++ " awaiting packet"
@@ -141,13 +134,13 @@ createTransceiver _name eitherSocket initialUnacked = do
           maybeBundle <- collectUnreliablePacket bundleNum payload
           case maybeBundle of
             Nothing -> return ()
-            Just bundle -> liftIO . atomically . writeTChan verifiedPackets $ Unreliable bundle
+            Just bundle -> liftIO . atomically . writeTChan verifiedPackets $! Unreliable bundle
         -- Reliable packets are only processed if they match the next sequence number we're waiting for.
         -- We then send back an acknowledgement of them and pass them along to the application.
         ReliablePacket seqNum payload ->
           collectReliablePacket seqNum $ liftIO $ do
             _ <- sendUnreliablePacket (ReliablePacketAck seqNum :: WirePacket r)
-            liftIO . atomically . writeTChan verifiedPackets $ Reliable payload
+            liftIO . atomically . writeTChan verifiedPackets $! Reliable payload
         -- Until we receive a ReliablePacketAck, we'll keep sending the unacknowledged
         -- seqNums along using sendReliablePacket (above, in 'outgoing')
         ReliablePacketAck seqNum ->
@@ -165,7 +158,7 @@ createTransceiver _name eitherSocket initialUnacked = do
 
 -- Start a watchdog to make sure we are still receiving messages
 addWatchdog :: Transceiver r -> IO () -> IO ()
-addWatchdog transceiver finalizer = void . forkIO' $ do
+addWatchdog transceiver finalizer = void . forkIO $ do
   let loop = do
         isExpired <- (>1) <$> (diffUTCTime <$> getCurrentTime <*> atomically (readTVar (tcLastMessageTime transceiver)))
         if isExpired 
