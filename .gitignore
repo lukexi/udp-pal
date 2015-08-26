@@ -5,3 +5,5 @@ dist
 *.hp
 *.prof
 *.ps
+
+*.svg
