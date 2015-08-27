@@ -20,6 +20,14 @@ import           Control.Exception
 
 import           Data.Binary
 import           Network.Socket
+import           Network.Info
+
+findLocalIP = do
+  interfaces <- getNetworkInterfaces
+  let desired = filter ((`elem` ["en0", "Wi-Fi"]) . name) interfaces
+  case desired of
+    (x:_) -> return . show . ipv4 $ x
+    _ -> error $ "Couldn't find en0 or Wi-Fi in: " ++ show interfaces
 
 -- | Creates a server than listens for incoming messages from clients
 -- and broadcasts them to all listening clients. Returns a channel that
