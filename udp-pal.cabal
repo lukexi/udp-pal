@@ -73,7 +73,7 @@ executable client-gl
     Types
   build-depends:       base, udp-pal, network, bytestring, 
                        lens, containers, mtl, stm, binary, 
-                       halive, gl-pal2, lens, glfw-pal, 
+                       halive, gl-pal, lens, glfw-pal, 
                        linear, gl, random, time
 
 executable server-gl
@@ -86,5 +86,5 @@ executable server-gl
     Types
   build-depends:       base, udp-pal, network, bytestring, 
                        lens, containers, mtl, stm, binary, 
-                       halive, gl-pal2, lens, glfw-pal, 
+                       halive, gl-pal, lens, glfw-pal, 
                        linear, gl, random, time

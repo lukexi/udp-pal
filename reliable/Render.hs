@@ -10,7 +10,7 @@ import qualified Data.Map.Strict               as Map
 --import           Data.Map.Strict               (Map)
 import           Control.Lens hiding (view)
 import           Graphics.UI.GLFW.Pal
-import           Graphics.GL.Pal2
+import           Graphics.GL.Pal
 import           Graphics.GL
 import           Linear
 
