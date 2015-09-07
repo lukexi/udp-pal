@@ -30,27 +30,27 @@ data Uniforms = Uniforms
 resX, resY :: Int
 resX=1024; resY=768
 
-initRenderer :: IO (Window, Events, Entity Uniforms)
+initRenderer :: IO (Window, Events, Shape Uniforms)
 initRenderer = do
   (window, events) <- createWindow "ReliableCubes" resX resY
 
   cubeProg   <- createShaderProgram "reliable/poly.vert" "reliable/poly.frag"
-  cubeGeo    <- cubeGeometry ( 0.5 :: V3 GLfloat ) ( V3 1 1 1 )
-  cube       <- entity cubeGeo cubeProg 
+  cubeGeo    <- cubeGeometry (0.5 :: V3 GLfloat) (V3 1 1 1)
+  cubeShape  <- makeShape cubeGeo cubeProg 
 
   glEnable GL_DEPTH_TEST
   glClearColor 0 0 0.1 1
   glEnable GL_CULL_FACE
   glCullFace GL_BACK
 
-  useProgram (program cube)
+  useProgram (sProgram cubeShape)
 
-  return (window, events, cube)
+  return (window, events, cubeShape)
 
 renderFrame :: (MonadIO m, MonadState AppState m) 
-            => Window -> Entity Uniforms -> m ()
+            => Window -> Shape Uniforms -> m ()
 renderFrame window cube = do
-  let Uniforms{..} = uniforms cube
+  let Uniforms{..} = sUniforms cube
   glClear (GL_COLOR_BUFFER_BIT .|. GL_DEPTH_BUFFER_BIT)
 
   projection  <- makeProjection window
@@ -62,34 +62,34 @@ renderFrame window cube = do
 
   newCubes   <- use cubePoses
   newPlayers <- use playerPoses
-  withVAO ( vAO cube ) $ do
-    forM_ ( Map.toList newCubes ) $ \( objID , pose ) -> do
+  withVAO (sVAO cube) $ do
+    forM_ (Map.toList newCubes) $ \(objID , pose) -> do
 
       let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
       color <- fromMaybe (V4 0 1 0 1) <$> use (cubeColors . at objID)
 
-      drawEntity cube model projectionView color
-    forM_ ( Map.toList newPlayers ) $ \( playerID , pose ) -> do
+      drawShape cube model projectionView color
+    forM_ (Map.toList newPlayers) $ \(playerID , pose) -> do
 
       let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
       color <- fromMaybe (V4 0 1 0 1) <$> use (playerColors . at playerID)
 
-      drawEntity cube model projectionView color
+      drawShape cube model projectionView color
 
   swapBuffers window
 
-drawEntity :: MonadIO m => Entity Uniforms -> M44 GLfloat -> M44 GLfloat -> Color -> m ()
-drawEntity anEntity model projectionView color = do 
+drawShape :: MonadIO m => Shape Uniforms -> M44 GLfloat -> M44 GLfloat -> Color -> m ()
+drawShape shape model projectionView color = do 
 
-  let Uniforms{..} = uniforms anEntity
+  let Uniforms{..} = sUniforms shape
 
   uniformM44 uViewProjection projectionView
   uniformM44 uInverseModel (fromMaybe model (inv44 model))
   uniformM44 uModel model
   uniformV4  uDiffuse color
 
-  let vc = vertCount ( geometry anEntity ) 
-  glDrawElements GL_TRIANGLES ( vc ) GL_UNSIGNED_INT nullPtr
+  let vc = vertCount (sGeometry shape) 
+  glDrawElements GL_TRIANGLES vc GL_UNSIGNED_INT nullPtr
 
 -- | Get a view matrix for a camera at a given position and orientation
 viewMatrix :: (RealFloat a, Conjugate a) => V3 a -> Quaternion a -> M44 a
