@@ -29,28 +29,33 @@ findLocalIP = do
     (x:_) -> return . show . ipv4 $ x
     _ -> error $ "Couldn't find en0 or Wi-Fi in: " ++ show interfaces
 
+data Server r = Server
+  { svrSockAddr       :: SockAddr
+  , svrReceive        :: IO [(SockAddr, AppPacket r)] -- ^ Get packets from clients
+  , svrBroadcast      :: AppPacket r -> IO ()         -- ^ Send a packet to all clients
+  , svrGetDisconnects :: IO [SockAddr]                -- ^ Hear about disconnections
+  }
+
 -- | Creates a server than listens for incoming messages from clients
 -- and broadcasts them to all listening clients. Returns a channel that
 -- can broadcast to all listening clients.
 
-createServer :: forall r m. (Binary r, MonadIO m) 
+createServer :: forall r. (Binary r) 
              => HostName 
              -> PortNumber 
              -> PacketSize 
-             -> IO (m [(SockAddr, AppPacket r)], -- Get packets from clients
-                    AppPacket r -> m (),         -- Send a packet to all clients
-                    TChan SockAddr)              -- Hear about disconnections
+             -> IO (Server r)
 createServer serverName serverPort packetSize = do
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   let finallyClose = flip finally (close (bsSocket incomingSocket))
 
-  broadcastChan <- newBroadcastTChanIO
-  disconnectionsChan <- newTChanIO
+  disconnectionsChan  <- newTChanIO
+  broadcastChan       <- newBroadcastTChanIO
+  
+  reliableStateChan   <- atomically $ dupTChan broadcastChan
+  reliableStateAccum  <- newTVarIO mempty
+  reliableStateSeqNum <- newTVarIO 0
 
-  (reliableStateChan, reliableStateAccum, reliableStateSeqNum) <- atomically $ 
-    (,,) <$> dupTChan broadcastChan
-         <*> newTVar mempty
-         <*> newTVar 0
   -- Create a process to collect all reliable messages, 
   -- so we can catch new clients up with everything that's happend.
   _ <- forkIO . forever . atomically $ do
@@ -128,5 +133,9 @@ createServer serverName serverPort packetSize = do
   let receiveFromClients = filter ((/= ourAddr) . fst) <$> liftIO (atomically (exhaustChan packetsFromClients))
       broadcastToClients = liftIO . atomically . writeTChan broadcastChan . ((ourAddr,) $!)
 
-  return (receiveFromClients, broadcastToClients, disconnectionsChan)
-
+  return Server
+    { svrSockAddr       = ourAddr
+    , svrReceive        = receiveFromClients
+    , svrBroadcast      = broadcastToClients
+    , svrGetDisconnects = atomically (exhaustChan disconnectionsChan)
+    }

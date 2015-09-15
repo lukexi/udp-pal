@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE RecordWildCards           #-}
 
 import           Linear
 import qualified Data.Map.Strict               as Map
@@ -19,12 +20,12 @@ main :: IO ()
 main = do
   putStrLn "GL Server running."
   
-  (receiveFromClients, broadcastToClients, disconnectionsChan) <- createServer serverName serverPort packetSize
+  Server{..} <- createServer serverName serverPort packetSize
   
   -- The server's main thread then runs physics simulations
   void . flip runStateT emptyAppState . forever $ do
     
-    disconnections <- liftIO (atomically (exhaustChan disconnectionsChan))
+    disconnections <- liftIO svrGetDisconnects
     forM_ disconnections $ \fromAddr -> do
       -- For each SockAddr we've detected a disconnection from,
       -- find its associated player ID and broadcast a message to clients
@@ -35,12 +36,12 @@ main = do
       playerIDs . at fromAddr .== Nothing
       let message = DisconnectClient playerID
       interpretToState message
-      broadcastToClients (Reliable message)
+      liftIO $ svrBroadcast (Reliable message)
 
       liftIO $ putStrLn $ "Goodbye: " ++ show fromAddr
 
     -- Process new packets
-    interpretNetworkPacketsFromOthers receiveFromClients $ \fromAddr msg -> case msg of
+    interpretNetworkPacketsFromOthers (liftIO svrReceive) $ \fromAddr msg -> case msg of
       message@(ConnectClient playerID _pose _color) -> do
         -- Associate the playerID with the fromAddr we already know,
         -- so we can send an accurate disconnect message later
@@ -55,6 +56,6 @@ main = do
 
     
     --liftIO . putStrLn $ "Sending: " ++ show poses
-    broadcastToClients (Unreliable objPoses)
+    liftIO $ svrBroadcast (Unreliable objPoses)
 
     liftIO $ threadDelay (1000000 `div` 60)
