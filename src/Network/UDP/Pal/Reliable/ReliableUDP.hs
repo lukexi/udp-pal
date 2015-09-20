@@ -73,7 +73,7 @@ collectUnreliablePacket bundleNum payload = do
     then return Nothing
     else do
       newBundles <- connBundles <%= Map.insertWith (<>) bundleNum [payload]
-      if Map.size newBundles < 5
+      if Map.size newBundles < 3
         then return Nothing
         else do
           let ((_oldestBundleNum, oldestBundle), bundlesMinusOldest) = Map.deleteFindMin newBundles

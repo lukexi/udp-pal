@@ -7,47 +7,7 @@ FIXME:
     
 
 
-
-
-
-
-TODAY:
-
-
-
-
-[ ] Finish up example with some basic mouse tracking to test client-sent unreliable packets, clicking to add cube in front of position, expiration of cubes.
-
-
-
-
-
-[ ] Think about expiration, which still may be most reliably done
-    as a clientside/serverside combo thing where the client auto-expires
-    cubes after they've existed for x seconds, and same with server.
-
-
-
-[x] Get OpenAL basics working, then try streaming libpd to it.
-
-[ ] Add libpd and check out some server driven + client driven tones
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+[ ] Add zlib compression
 
 
 
