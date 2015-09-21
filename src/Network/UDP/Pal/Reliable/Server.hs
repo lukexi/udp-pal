@@ -7,7 +7,7 @@ module Network.UDP.Pal.Reliable.Server where
 
 import qualified Data.Map.Strict               as Map
 import           Control.Concurrent.STM
--- import           Halive.Concurrent
+import           Halive.Concurrent
 import           Control.Concurrent
 
 import           Network.UDP.Pal.Types
@@ -22,6 +22,7 @@ import           Data.Binary
 import           Network.Socket
 import           Network.Info
 
+findLocalIP :: IO String
 findLocalIP = do
   interfaces <- getNetworkInterfaces
   let desired = filter ((`elem` ["en0", "Wi-Fi"]) . name) interfaces
@@ -58,7 +59,7 @@ createServer serverName serverPort packetSize = do
 
   -- Create a process to collect all reliable messages, 
   -- so we can catch new clients up with everything that's happend.
-  _ <- forkIO . forever . atomically $ do
+  _ <- forkIO' . forever . atomically $ do
     (_fromAddr, newItem) <- readTChan reliableStateChan
     case newItem of
       Reliable relItem -> do
@@ -89,13 +90,13 @@ createServer serverName serverPort packetSize = do
         transceiver@Transceiver{..} <- createTransceiver "Server" (Right toClientSock) reliableState
 
         -- Send verified packets to all clients, tagged with this clients address
-        incomingThread <- forkIO . forever . atomically $ 
+        incomingThread <- forkIO' . forever . atomically $ 
           writeTChan broadcastChan =<< (fromAddr,) <$> readTChan tcVerifiedPackets
         -- debug helper to purge the verified queue. stops the memory leak....
-        -- incomingThread <- forkIO . forever $ (atomically (readTChan tcVerifiedPackets)) 
+        -- incomingThread <- forkIO' . forever $ (atomically (readTChan tcVerifiedPackets)) 
         
         -- Send all broadcasts to this client, except messages we sent ourselves
-        outgoingThread <- forkIO . forever . atomically $ 
+        outgoingThread <- forkIO' . forever . atomically $ 
           readTChan broadcastsToClient >>= \case
             (bcastFrom, msg) 
               | bcastFrom == fromAddr -> return ()
@@ -113,7 +114,7 @@ createServer serverName serverPort packetSize = do
 
   -- Launch the server router thread to route incoming packets to 
   -- their client's receivers, launching them if they don't exist
-  _ <- forkIO . finallyClose . void . forever $ do
+  _ <- forkIO' . finallyClose . void . forever $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
 

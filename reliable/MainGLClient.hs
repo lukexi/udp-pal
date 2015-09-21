@@ -12,10 +12,10 @@ import           Network.UDP.Pal
 
 import           Control.Concurrent.STM
 import           Halive.Concurrent
-import           Control.Lens hiding (view)
+import           Control.Lens.Extra hiding (view)
 import           Data.Time
 import           Graphics.UI.GLFW.Pal
-import           Linear
+import           Linear.Extra
 
 import           System.Random
 import           Types

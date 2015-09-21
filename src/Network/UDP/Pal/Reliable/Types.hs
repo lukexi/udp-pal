@@ -8,7 +8,6 @@ import           Data.Map.Strict     (Map)
 import           GHC.Generics
 import           Control.Concurrent.STM
 import           Data.Time
-import           Control.Monad.State.Strict
 
 -- Each packet is tagged with a monotonic sequence number.
 -- On each transmission, we send all packets in order, over and over,
@@ -54,21 +53,3 @@ data Transceiver r = Transceiver
   , tcLastMessageTime    :: TVar UTCTime
   , tcShutdown           :: IO ()
   }
-
-
--- Move these to lens-extra or somesuch
--- (Hide the normal .= ?= %= and only export these strict variants)
--- forceState = do x <- get; x `seq` return ()
-
-l .== x = modify' (l .~ x)
-
-l ?== x = modify' (l ?~ x)
-
-l %== f = modify' (l %~ f)
-
-l *== x = modify' (l *~ x)
-
-infix 4 .==
-infix 4 ?==
-infix 4 %==
-infix 4 *==

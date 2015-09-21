@@ -4,6 +4,8 @@ packages:
 - ../gl-pal
 - ../glfw-pal
 - ../halive
+- ../lens-extra
+- ../linear-extra
 extra-deps:
 - GLFW-b-1.4.7.2
 - bindings-GLFW-3.1.1.3

@@ -3,14 +3,14 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE RecordWildCards           #-}
 
-import           Linear
+import           Linear.Extra
 import qualified Data.Map.Strict               as Map
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import           Network.UDP.Pal
 import           Control.Monad.State.Strict
-import           Control.Lens
+import           Control.Lens.Extra
 import           Data.Time
 
 import           Types
@@ -33,7 +33,7 @@ main = do
       -- visible rendering of that player.
 
       Just playerID <- use $ playerIDs . at fromAddr
-      playerIDs . at fromAddr .== Nothing
+      playerIDs . at fromAddr .= Nothing
       let message = DisconnectClient playerID
       interpretToState message
       liftIO $ svrBroadcast (Reliable message)
@@ -45,12 +45,12 @@ main = do
       message@(ConnectClient playerID _pose _color) -> do
         -- Associate the playerID with the fromAddr we already know,
         -- so we can send an accurate disconnect message later
-        playerIDs . at fromAddr ?== playerID
+        playerIDs . at fromAddr ?= playerID
         interpretToState message
       message -> interpretToState message
 
     -- Run physics
-    cubePoses . traversed . posOrientation *== axisAngle (V3 0 1 0) 0.1
+    cubePoses . traversed . posOrientation *= axisAngle (V3 0 1 0) 0.1
     cubes <- use $ cubePoses . to Map.toList
     let objPoses = map (uncurry ObjectPose) cubes
 

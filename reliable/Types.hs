@@ -5,20 +5,15 @@
 module Types where
 import GHC.Generics (Generic)
 import           Graphics.GL
-import           Linear
+import           Linear.Extra
+import Linear
 import           Data.Binary
 
-import           Control.Lens
+import           Control.Lens.Extra
 import           Control.Monad.State.Strict
 import           Data.Map.Strict (Map)
 import           Network.UDP.Pal
 import           System.Random
-
-data Pose = Pose
-  { _posPosition    :: !(V3 GLfloat)
-  , _posOrientation :: !(Quaternion GLfloat)
-  } deriving (Generic, Binary, Show)
-makeLenses ''Pose
 
 type Color = V4 GLfloat
 
@@ -26,20 +21,20 @@ type ObjectID = Int
 type PlayerID = String
 
 data ObjectOp
-  = CreateObject     !ObjectID !Pose !Color
-  | ConnectClient    !PlayerID !Pose !Color
+  = CreateObject     !ObjectID !(Pose GLfloat) !Color
+  | ConnectClient    !PlayerID !(Pose GLfloat) !Color
   | DisconnectClient !PlayerID
-  | ObjectPose       !ObjectID !Pose
-  | PlayerPose       !PlayerID !Pose
+  | ObjectPose       !ObjectID !(Pose GLfloat)
+  | PlayerPose       !PlayerID !(Pose GLfloat)
   deriving (Show, Generic)
 instance Binary ObjectOp
 
 
 
 data AppState = AppState 
-  { _cubePoses    :: !(Map ObjectID Pose)
+  { _cubePoses    :: !(Map ObjectID (Pose GLfloat))
   , _cubeColors   :: !(Map ObjectID Color)
-  , _playerPoses  :: !(Map PlayerID Pose)
+  , _playerPoses  :: !(Map PlayerID (Pose GLfloat))
   , _playerColors :: !(Map PlayerID Color)
   , _playerIDs    :: !(Map SockAddr PlayerID) -- Only needed on server
   } deriving (Show)
@@ -69,29 +64,29 @@ randomColor = liftIO $ V4 <$> randomRIO (0, 1) <*> randomRIO (0, 1) <*> randomRI
 interpretToState :: (MonadIO m, MonadState AppState m) => ObjectOp -> m ()
 interpretToState (CreateObject objID pose color) = do
   liftIO $ print (CreateObject objID pose color)
-  cubePoses  . at objID ?== pose
-  cubeColors . at objID ?== color
+  cubePoses  . at objID ?= pose
+  cubeColors . at objID ?= color
   -- liftIO . print =<< use cubePoses
   -- liftIO . print =<< use cubeColors
 
 interpretToState (ConnectClient playerID pose color) = do
   liftIO $ putStrLn $ "Hello, " ++ playerID
-  playerPoses  . at playerID ?== pose
-  playerColors . at playerID ?== color
+  playerPoses  . at playerID ?= pose
+  playerColors . at playerID ?= color
 
 interpretToState (DisconnectClient playerID) = do
-  playerPoses  . at playerID .== Nothing
-  playerColors . at playerID .== Nothing
+  playerPoses  . at playerID .= Nothing
+  playerColors . at playerID .= Nothing
   liftIO $ putStrLn $ "Goodbye, " ++ playerID
 
 interpretToState (ObjectPose objID pose) = do
   --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
   -- We use traverse here to only set a new value if there's already one there,
   -- to keep unreliable messages from affecting state out of order.
-  cubePoses . at objID . traverse .== pose
+  cubePoses . at objID . traverse .= pose
 interpretToState (PlayerPose objID pose) = do
   --liftIO $ putStrLn $ "Updating pose to: " ++ show (ObjectPose objID pose)
-  playerPoses . at objID . traverse .== pose
+  playerPoses . at objID . traverse .= pose
   -- liftIO . print =<< use playerPoses
 
 

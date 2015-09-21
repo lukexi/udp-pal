@@ -39,7 +39,7 @@ library
     bytestring, 
     mtl, stm,
     containers,
-    halive, lens, time
+    halive, lens, time, lens-extra
 
 -- executable demo
 --   main-is:             Main.hs
@@ -74,7 +74,7 @@ executable client-gl
   build-depends:       base, udp-pal, network, bytestring, 
                        lens, containers, mtl, stm, binary, 
                        halive, gl-pal, lens, glfw-pal, 
-                       linear, gl, random, time
+                       linear, gl, random, time, linear-extra, lens-extra
 
 executable server-gl
   main-is:             MainGLServer.hs
@@ -87,4 +87,4 @@ executable server-gl
   build-depends:       base, udp-pal, network, bytestring, 
                        lens, containers, mtl, stm, binary, 
                        halive, gl-pal, lens, glfw-pal, 
-                       linear, gl, random, time
+                       linear, gl, random, time, linear-extra, lens-extra
