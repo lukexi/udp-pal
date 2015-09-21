@@ -14,7 +14,7 @@ import           Network.UDP.Pal.Socket
 import           Network.UDP.Pal.Types
 
 echoServer :: HostName -> PortNumber -> Int -> IO ()
-echoServer serverName serverPort packetSize = void . forkIO $ do
+echoServer serverName serverPort packetSize = void . forkIO' $ do
 
   incomingSocket <- boundSocket (Just serverName) serverPort packetSize
   clients        <- newMVar mempty
@@ -45,7 +45,7 @@ registerClient broadcastChan clients fromAddr =
 -- | Creates a new socket to the client's address, and creates a TChan that's
 -- continuously listened to on a new thread and passed along to the new socket
 newClientThread :: SockAddr -> TChan ByteString -> MVar (Set SockAddr) -> IO ThreadId
-newClientThread clientAddr messageChan clients = forkIO $ do
+newClientThread clientAddr messageChan clients = forkIO' $ do
   -- Create a connected socket to send messages to the client
   toClientSock <- connectedSocketToAddr clientAddr
 

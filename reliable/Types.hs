@@ -6,7 +6,6 @@ module Types where
 import GHC.Generics (Generic)
 import           Graphics.GL
 import           Linear.Extra
-import Linear
 import           Data.Binary
 
 import           Control.Lens.Extra
