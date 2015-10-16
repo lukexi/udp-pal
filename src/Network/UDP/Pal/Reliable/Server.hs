@@ -21,14 +21,20 @@ import           Control.Exception
 import           Data.Binary
 import           Network.Socket
 import           Network.Info
+import           Data.List
 
-findLocalIP :: IO String
-findLocalIP = do
+isPrivateNetIP :: IPv4 -> Bool
+isPrivateNetIP ip = or $ (`isPrefixOf` show ip) <$> ["10.", "172.", "192."]
+
+findPrivateNetIP :: IO String
+findPrivateNetIP = do
   interfaces <- getNetworkInterfaces
-  let desired = filter ((`elem` ["en0", "Wi-Fi"]) . name) interfaces
+  let desired = filter (isPrivateNetIP . ipv4) interfaces
   case desired of
     (x:_) -> return . show . ipv4 $ x
-    _ -> error $ "Couldn't find en0 or Wi-Fi in: " ++ show interfaces
+    _ -> do
+      putStrLn ("Couldn't find private net ip (returning 127.0.0.1) in: " ++ show interfaces)
+      return "127.0.0.1"
 
 data Server r = Server
   { svrSockAddr       :: SockAddr

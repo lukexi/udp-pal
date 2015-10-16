@@ -82,7 +82,7 @@ createTransceiver _name eitherSocket initialUnacked = do
   lastMessageTime     <- newTVarIO =<< getCurrentTime
   
   let conn = (newTransceiverState :: TransceiverState r)
-                & connUnacked .~ initialUnacked
+                & connUnacked      .~ initialUnacked
                 & connNextSeqNumTo .~ 
                     if Map.null initialUnacked then 0 else (succ . fst . Map.findMax) initialUnacked
       sendUnreliablePacket  = either sendBinary   sendBinaryConn   eitherSocket
