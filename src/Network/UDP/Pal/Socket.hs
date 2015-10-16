@@ -34,7 +34,7 @@ boundSocket maybeHostName listenPort packetSize = do
 
 socketWithDest :: HostName -> PortNumber -> PacketSize -> IO SocketWithDest
 socketWithDest destName destPort packetSize = do
-  boundSock      <- boundSocket Nothing (0::PortNumber) packetSize
+  boundSock      <- boundSocket Nothing aNY_PORT packetSize
   -- Get the address for the server's receive port
   serverAddrInfo <- addressInfo (Just destName) (Just (show destPort))
 
