@@ -16,15 +16,38 @@ broadcastSocket port bufferSize = do
   setSocketOption (bsSocket (swdBoundSocket socket)) Broadcast 1
   return socket
 
-
 broadcastIP = "255.255.255.255"
 
-main = do
-  killThreads
-  putStrLn "Broadcast example"
-  privateIP <- findPrivateNetIP
-  putStrLn $ "IP is: " ++ show privateIP
-  
+boundSocketAny port bufferSize = do
+  anyHost <- inet_ntoa iNADDR_ANY
+  boundSocket (Just anyHost) 9999 4096
+
+
+beginSearch = forkIO' $ do
+
+  -- Begin trying to receive a server beacon message
+  receiveSocket <- boundSocketAny 9999 4096
+  searchResultMVar <- newEmptyMVar
+  searchThread <- forkIO . forever $ do
+    putStrLn "Receiving..."
+    receivedData <- receiveFromDecoded receiveSocket
+    case receivedData of
+      (receivedMagicNumber, SockAddrInet _port hostAddress) | receivedMagicNumber == magicNumber -> do
+        hostAddressString <- inet_ntoa hostAddress
+        putMVar searchResultMVar hostAddressString
+      _ -> return ()
+
+  -- Search for 1 second
+  threadDelay 1000000
+  killThread searchThread
+
+  -- Check the results
+  searchResult <- tryReadMVar searchResultMVar
+  case searchResult of
+    Just foundServerIP -> putStrLn $ "connectToServer: " ++ foundServerIP
+    Nothing -> putStrLn "startServerAndBroadcaster"
+
+beginBroadcaster = do
   socket <- broadcastSocket 9999 4096
 
   forkIO' . forever $ do
@@ -32,17 +55,14 @@ main = do
     sendBinary socket magicNumber
     threadDelay (1000000 `div` 2)
 
-  anyHost <- inet_ntoa iNADDR_ANY
-  -- receiveSocket <- boundSocket (Just anyHost) aNY_PORT 4096
+main = do
+  killThreads
+  putStrLn "Broadcast example"
+  privateIP <- findPrivateNetIP
+  putStrLn $ "IP is: " ++ show privateIP
 
-  receiveSocket <- boundSocket (Just anyHost) 9999 4096
+  beginBroadcaster
+  beginSearch
 
-
-  forever $ do
-    putStrLn "Receiving..."
-    blah <- receiveFromDecoded receiveSocket
-    print (blah :: (Int, SockAddr))
-
-
-
+  threadDelay 2000000
   putStrLn "Done!"
