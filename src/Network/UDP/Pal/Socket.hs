@@ -21,6 +21,7 @@ boundSocket maybeHostName listenPort packetSize = do
   -- Create a socket
   addrInfo <- addressInfo maybeHostName (Just (show listenPort))
   sock <- socket (addrFamily addrInfo) Datagram defaultProtocol
+  setSocketOption sock ReuseAddr 1
   -- Bind it to the complete address
   bind sock (addrAddress addrInfo)
   
@@ -77,6 +78,7 @@ connectedSocketToAddr :: MonadIO m => SockAddr -> m ConnectedSocket
 connectedSocketToAddr sockAddr = liftIO $ do
   -- Create a socket
   sock <- socket AF_INET Datagram defaultProtocol
+  setSocketOption sock ReuseAddr 1
   -- Connect it to the address for send/recv
   connect sock sockAddr
   return (ConnectedSocket sock)
