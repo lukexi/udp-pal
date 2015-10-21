@@ -123,6 +123,7 @@ createServer serverName serverPort packetSize = do
   _ <- forkIO' . finallyClose . void . forever $ do
     -- Receive a message along with the address it originated from
     (newMessage, fromAddr) <- receiveFromRaw incomingSocket
+      `catch` \(e :: SomeException) -> putStr "receiveFromRaw: " >> print e >> return undefined
 
     -- Find the client receiver who should process this message
     transceiver <- findClient fromAddr

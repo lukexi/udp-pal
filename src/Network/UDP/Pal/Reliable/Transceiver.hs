@@ -10,6 +10,7 @@ import           Network.UDP.Pal.Types
 import           Network.UDP.Pal.Reliable.Types
 
 import           Control.Concurrent
+import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Strict
 import           Halive.Concurrent
@@ -46,6 +47,11 @@ streamInto channel action =
   forkIO . forever $
     action >>= atomically . writeTChan channel
 
+streamRightInto channel action = 
+  forkIO . forever $ action >>= \case
+    Right r -> atomically (writeTChan channel r)
+    Left _ -> return ()
+
 exhaustChan :: TChan a -> STM [a]
 exhaustChan chan = reverse <$> go mempty
   where
@@ -59,11 +65,15 @@ createTransceiverToAddress :: forall r. (Binary r)
                            -> Int
                            -> IO (Transceiver r)
 createTransceiverToAddress serverName serverPort packetSize = do
+  putStrLn $ "Creating transceiver to " ++ serverName ++ " " ++ show serverPort
   toServerSock <- socketWithDest serverName serverPort packetSize
   transceiver <- createTransceiver "Client" (Left toServerSock) mempty
+
+  -- let name = serverName ++ ":" ++ show serverPort
+  let receive = try (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket r))
+      _ = receive :: IO (Either IOException (WirePacket r)) 
   -- Stream received packets into the Transceiver's packetsIn channel
-  _receiveThread <- streamInto (tcIncomingRawPackets transceiver) 
-    (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket r))
+  _receiveThread <- streamRightInto (tcIncomingRawPackets transceiver) receive
 
   displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
   putStrLn $ "*** Launched client: " ++ displayName
