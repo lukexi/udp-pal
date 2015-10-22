@@ -13,6 +13,7 @@ import           Network.UDP.Pal.Binary
 import           Network.UDP.Pal.Socket
 import           Network.UDP.Pal.Types
 
+
 echoServer :: HostName -> PortNumber -> Int -> IO ()
 echoServer serverName serverPort packetSize = void . forkIO' $ do
 
@@ -32,6 +33,7 @@ echoServer serverName serverPort packetSize = void . forkIO' $ do
     -- Broadcast the message to all clients
     atomically $ writeTChan broadcastChan newMessage
 
+
 registerClient :: TChan ByteString -> MVar (Set SockAddr) -> SockAddr -> IO ()
 registerClient broadcastChan clients fromAddr =
   modifyMVar_ clients $ \currentClients ->
@@ -41,6 +43,7 @@ registerClient broadcastChan clients fromAddr =
       messageChan <- atomically $ dupTChan broadcastChan
       _ <- newClientThread fromAddr messageChan clients
       return $ Set.insert fromAddr currentClients
+
 
 -- | Creates a new socket to the client's address, and creates a TChan that's
 -- continuously listened to on a new thread and passed along to the new socket
