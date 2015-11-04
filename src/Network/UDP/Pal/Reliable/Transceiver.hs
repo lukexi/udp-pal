@@ -116,8 +116,8 @@ createTransceiver _name eitherSocket initialUnacked = do
         case (outgoing, packet) of
           ([], []) -> retry
           (someOutgoing, someIncoming) -> return (someOutgoing, someIncoming)
-      when (not (null incoming)) $ 
-        liftIO . atomically . writeTVar lastMessageTime =<< liftIO getCurrentTime
+      when (not (null incoming)) . liftIO $ 
+        atomically . writeTVar lastMessageTime =<< getCurrentTime
       
       -- Each outgoing packet can be sent as Reliable or Unreliable.
       forM_ (outgoing :: [AppPacket r]) $ \case
