@@ -49,7 +49,7 @@ renderFrame window cube = do
   let Uniforms{..} = sUniforms cube
   glClear (GL_COLOR_BUFFER_BIT .|. GL_DEPTH_BUFFER_BIT)
 
-  projection  <- makeProjection window
+  projection  <- getWindowProjection window 45 0.1 100
   let playerPos      = V3 0 0 5
       playerOrient   = axisAngle (V3 0 1 0) 0
       view           = viewMatrix playerPos playerOrient
@@ -64,18 +64,18 @@ renderFrame window cube = do
       let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
       color <- fromMaybe (V4 0 1 0 1) <$> use (cubeColors . at objID)
 
-      drawShape cube model projectionView color
+      drawShape' cube model projectionView color
     forM_ (Map.toList newPlayers) $ \(playerID , pose) -> do
 
       let model = mkTransformation (pose ^. posOrientation) (pose ^. posPosition)
       color <- fromMaybe (V4 0 1 0 1) <$> use (playerColors . at playerID)
 
-      drawShape cube model projectionView color
+      drawShape' cube model projectionView color
 
   swapBuffers window
 
-drawShape :: MonadIO m => Shape Uniforms -> M44 GLfloat -> M44 GLfloat -> Color -> m ()
-drawShape shape model projectionView color = do 
+drawShape' :: MonadIO m => Shape Uniforms -> M44 GLfloat -> M44 GLfloat -> Color -> m ()
+drawShape' shape model projectionView color = do 
 
   let Uniforms{..} = sUniforms shape
 
@@ -84,18 +84,5 @@ drawShape shape model projectionView color = do
   uniformM44 uModel model
   uniformV4  uDiffuse color
 
-  let vc = vertCount (sGeometry shape) 
+  let vc = geoVertCount (sGeometry shape) 
   glDrawElements GL_TRIANGLES vc GL_UNSIGNED_INT nullPtr
-
--- | Get a view matrix for a camera at a given position and orientation
-viewMatrix :: (RealFloat a, Conjugate a) => V3 a -> Quaternion a -> M44 a
-viewMatrix position orientation = mkTransformation q (rotate q . negate $ position)
-    where q = conjugate orientation
-
--- | Use the aspect ratio from the window to get a proper projection
-makeProjection :: (Floating a, MonadIO m) => Window -> m (M44 a)
-makeProjection win = do
-    (w,h) <- getWindowSize win
-    return $ perspective 45 (fromIntegral w / fromIntegral h) 0.01 100
-
-
