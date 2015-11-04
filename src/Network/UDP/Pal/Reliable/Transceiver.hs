@@ -13,7 +13,7 @@ import           Control.Concurrent
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Strict
-import           Halive.Concurrent
+-- import           Halive.Concurrent
 import           Network.UDP.Pal.Reliable.ReliableUDP
 import           Network.Socket (getSocketName)
 import           Data.Binary
@@ -47,7 +47,8 @@ streamInto channel action =
   forkIO . forever $
     action >>= atomically . writeTChan channel
 
-streamRightInto channel action = 
+streamRightsInto :: TChan a -> IO (Either t a) -> IO ThreadId
+streamRightsInto channel action = 
   forkIO . forever $ action >>= \case
     Right r -> atomically (writeTChan channel r)
     Left _ -> return ()
@@ -69,11 +70,11 @@ createTransceiverToAddress serverName serverPort packetSize = do
   toServerSock <- socketWithDest serverName serverPort packetSize
   transceiver <- createTransceiver "Client" (Left toServerSock) mempty
 
-  -- let name = serverName ++ ":" ++ show serverPort
+  -- See http://www.gamedev.net/topic/645149-recvfrom-and-wsaeconnreset/
   let receive = try (fst <$> receiveFromDecoded (swdBoundSocket toServerSock) :: IO (WirePacket r))
       _ = receive :: IO (Either IOException (WirePacket r)) 
   -- Stream received packets into the Transceiver's packetsIn channel
-  _receiveThread <- streamRightInto (tcIncomingRawPackets transceiver) receive
+  _receiveThread <- streamRightsInto (tcIncomingRawPackets transceiver) receive
 
   displayName  <- show <$> getSocketName (bsSocket (swdBoundSocket toServerSock))
   putStrLn $ "*** Launched client: " ++ displayName
