@@ -6,4 +6,4 @@ packages:
 - ../halive
 - ../lens-extra
 - ../linear-extra
-resolver: nightly-2015-11-03
+resolver: nightly-2015-12-03
