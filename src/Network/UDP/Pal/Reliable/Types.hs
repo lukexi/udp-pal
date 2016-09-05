@@ -13,19 +13,17 @@ import           Data.Time
 -- On each transmission, we send all packets in order, over and over,
 -- until we receive acknowledgement of their receipt.
 
-newtype SeqNum = SeqNum
-  { unSeqNum :: Int } 
-  deriving (Eq, Show, Ord, Num, Enum, Binary)
-newtype BundleNum = BundleNum
-  { unBundleNum :: Int } 
-  deriving (Eq, Show, Ord, Num, Enum, Binary)
+newtype SeqNum = SeqNum { unSeqNum :: Int }
+    deriving (Eq, Show, Ord, Num, Enum, Binary)
+newtype BundleNum = BundleNum { unBundleNum :: Int }
+    deriving (Eq, Show, Ord, Num, Enum, Binary)
 
 -- These are the packets that are actually serialized over the wire
-data WirePacket r = UnreliablePacket !BundleNum !r
-                    | ReliablePacket    !SeqNum !r
-                    | ReliablePacketAck !SeqNum
-                    | KeepAlive
-                    deriving (Show, Generic)
+data WirePacket r = UnreliablePacket  !BundleNum !r
+                  | ReliablePacket    !SeqNum    !r
+                  | ReliablePacketAck !SeqNum
+                  | KeepAlive
+                  deriving (Show, Generic)
 instance (Binary r) => Binary (WirePacket r)
 
 -- These are packets submitted to and received from the Transceiver
@@ -34,22 +32,22 @@ data AppPacket r = Unreliable ![r] | Reliable !r deriving Show
 -- The data necessary to track the retransmission of
 -- unacknowledged reliable packets.
 data TransceiverState r = TransceiverState
-  { _connNextSeqNumTo   :: !SeqNum
-  , _connNextSeqNumFrom :: !SeqNum
-  , _connNextBundleNum  :: !BundleNum
-  , _connUnacked        :: !(Map SeqNum r)
-  , _connBundles        :: !(Map BundleNum [r])
-  }
+    { _connNextSeqNumTo   :: !SeqNum
+    , _connNextSeqNumFrom :: !SeqNum
+    , _connNextBundleNum  :: !BundleNum
+    , _connUnacked        :: !(Map SeqNum r)
+    , _connBundles        :: !(Map BundleNum [r])
+    }
 
 makeLenses ''TransceiverState
 
 newTransceiverState :: Binary r => TransceiverState r
 newTransceiverState = TransceiverState 0 0 0 mempty mempty
 
-data Transceiver r = Transceiver 
-  { tcIncomingRawPackets :: TChan (WirePacket r)
-  , tcVerifiedPackets    :: TChan (AppPacket  r)
-  , tcOutgoingPackets    :: TChan (AppPacket  r)
-  , tcLastMessageTime    :: TVar UTCTime
-  , tcShutdown           :: IO ()
-  }
+data Transceiver r = Transceiver
+    { tcIncomingRawPackets :: TChan (WirePacket r)
+    , tcVerifiedPackets    :: TChan (AppPacket  r)
+    , tcOutgoingPackets    :: TChan (AppPacket  r)
+    , tcLastMessageTime    :: TVar UTCTime
+    , tcShutdown           :: IO ()
+    }
